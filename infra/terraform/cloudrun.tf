@@ -24,8 +24,9 @@ resource "google_cloud_run_v2_service" "backend" {
     }
 
     containers {
-      # Image will be built and pushed during CI/CD — placeholder for now
-      image = "gcr.io/${var.project_id}/janmat-backend:latest"
+      # Placeholder image — deploy.yml replaces this via gcloud run deploy
+      # lifecycle.ignore_changes below ensures terraform never reverts it
+      image = "us-docker.pkg.dev/cloudrun/container/hello:latest"
 
       resources {
         limits = {
