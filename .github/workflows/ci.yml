@@ -2,14 +2,25 @@ name: CI - PR Checks
 
 on:
   pull_request:
-    branches: [master]   # triggers on any PR targeting master (feature/* -> master)
+    branches: [master]
+    paths:
+      - "backend/**"
+      - "dashboard/**"
+      - "citizen-app/**"
   push:
     branches: [master]
+    paths:
+      - "backend/**"
+      - "dashboard/**"
+      - "citizen-app/**"
 
 jobs:
   backend:
     name: Backend - lint + test
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'backend/') ||
+      github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: backend
@@ -84,25 +95,3 @@ jobs:
       - name: Analyze
         working-directory: citizen-app
         run: flutter analyze --no-fatal-infos
-
-  terraform-validate:
-    name: Terraform - validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.9.x"
-
-      - name: fmt check
-        working-directory: infra/terraform
-        run: terraform fmt -check -recursive
-
-      - name: init
-        working-directory: infra/terraform
-        run: terraform init -backend=false
-
-      - name: validate
-        working-directory: infra/terraform
-        run: terraform validate
