@@ -27,11 +27,10 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Build & push image
         run: |
-          gcloud builds submit \
+          gcloud builds submit backend/ \
             --tag "$IMAGE:$GITHUB_SHA" \
-            --dockerfile backend/Dockerfile \
             --project "$PROJECT_ID" \
-            --timeout 900s .
+            --timeout 900s
           gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
       - name: Deploy to Cloud Run
         id: deploy
