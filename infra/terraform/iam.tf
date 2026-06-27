@@ -16,6 +16,41 @@ resource "google_service_account" "scheduler" {
   description  = "Used by Cloud Scheduler for kill/restart DB jobs"
 }
 
+# GitHub CI service account — used by Workload Identity Federation
+resource "google_service_account" "github_ci" {
+  account_id   = "janmat-github-ci"
+  display_name = "JanMat GitHub Actions CI"
+  description  = "Used by GitHub Actions via Workload Identity Federation"
+}
+
+locals {
+  github_ci_roles = [
+    "roles/run.developer",
+    "roles/run.admin",
+    "roles/bigquery.dataEditor",
+    "roles/bigquery.jobUser",
+    "roles/storage.objectAdmin",
+    "roles/pubsub.editor",
+    "roles/cloudsql.client",
+    "roles/secretmanager.admin",
+    "roles/logging.viewer",
+    "roles/monitoring.viewer",
+    "roles/cloudbuild.builds.editor",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/servicenetworking.networksAdmin",
+    "roles/artifactregistry.writer",
+  ]
+}
+
+resource "google_project_iam_member" "github_ci_roles" {
+  for_each = toset(local.github_ci_roles)
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.github_ci.email}"
+}
+
 # ─────────────────────────────────────────
 # IAM Bindings — Backend SA
 # ─────────────────────────────────────────
