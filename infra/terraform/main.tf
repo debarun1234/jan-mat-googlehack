@@ -11,11 +11,10 @@ terraform {
     }
   }
 
-  # Uncomment to use GCS backend for state (recommended for team)
-  # backend "gcs" {
-  #   bucket = "janmat-tfstate"
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "janmat-tfplans-project-f0fb8de7-7240-4128-965"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {
