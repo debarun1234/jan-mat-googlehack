@@ -1,0 +1,39 @@
+name: Cost Guard — Nightly Check
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+jobs:
+  cost-check:
+    name: Resource Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Check Cloud SQL state
+        id: db
+        run: |
+          STATE=$(gcloud sql instances describe janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --format='value(state)' 2>/dev/null || echo "UNKNOWN")
+          echo "state=$STATE" >> $GITHUB_OUTPUT
+          echo "Cloud SQL: $STATE"
+      - name: Alert if DB running overnight
+        if: steps.db.outputs.state == 'RUNNABLE'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const h = new Date().getUTCHours();
+            if (h >= 18 || h <= 0) {
+              github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title: '⚠️ Cloud SQL running overnight — cost alert',
+                body: 'DB is RUNNABLE outside business hours. Stop via Actions → DB Controls → Stop.',
+                labels: ['cost','infra']
+              });
+            }

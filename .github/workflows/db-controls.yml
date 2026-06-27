@@ -1,0 +1,34 @@
+name: DB Controls — Start / Stop
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Start or Stop Cloud SQL"
+        required: true
+        type: choice
+        options: [start, stop]
+      reason:
+        description: "Reason"
+        required: false
+        default: "Manual"
+jobs:
+  db-control:
+    name: Cloud SQL ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Start
+        if: inputs.action == 'start'
+        run: gcloud sql instances patch janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --activation-policy=ALWAYS --quiet
+      - name: Stop
+        if: inputs.action == 'stop'
+        run: gcloud sql instances patch janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --activation-policy=NEVER --quiet
+      - run: |
+          sleep 10
+          gcloud sql instances describe janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --format='value(state)'
