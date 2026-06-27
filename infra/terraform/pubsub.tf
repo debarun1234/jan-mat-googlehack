@@ -65,7 +65,7 @@ resource "google_pubsub_subscription" "dashboard_refresh" {
   topic = google_pubsub_topic.priority_updated.name
 
   ack_deadline_seconds       = 30
-  message_retention_duration = "300s"
+  message_retention_duration = "600s"
   retain_acked_messages      = false
 }
 
