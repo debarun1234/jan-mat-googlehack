@@ -1,4 +1,4 @@
-name: CI â€” PR Checks
+name: CI PR Checks
 on:
   pull_request:
     branches: [main]
