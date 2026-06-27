@@ -11,11 +11,11 @@ resource "google_sql_database_instance" "janmat_db" {
   deletion_protection = false # POC: allow easy teardown
 
   settings {
-    tier              = "db-f1-micro"  # 1 shared vCPU, 614MB RAM — cheapest tier
-    availability_type = "ZONAL"        # No HA = saves cost (single zone)
-    disk_size         = 10             # 10GB SSD minimum
+    tier              = "db-f1-micro" # 1 shared vCPU, 614MB RAM — cheapest tier
+    availability_type = "ZONAL"       # No HA = saves cost (single zone)
+    disk_size         = 10            # 10GB SSD minimum
     disk_type         = "PD_SSD"
-    disk_autoresize   = false          # Prevent accidental storage expansion
+    disk_autoresize   = false # Prevent accidental storage expansion
 
     # NEVER = stopped, ALWAYS = running
     # Cloud Scheduler toggles this overnight
@@ -84,6 +84,6 @@ resource "google_secret_manager_secret" "db_url" {
 }
 
 resource "google_secret_manager_secret_version" "db_url" {
-  secret = google_secret_manager_secret.db_url.id
+  secret      = google_secret_manager_secret.db_url.id
   secret_data = "postgresql+asyncpg://${var.db_user}:${var.db_password}@${google_sql_database_instance.janmat_db.private_ip_address}:5432/${var.db_name}"
 }

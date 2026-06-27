@@ -17,7 +17,7 @@ resource "google_pubsub_subscription" "grievance_processor" {
   name  = "grievance-processor-sub"
   topic = google_pubsub_topic.grievance_submitted.name
 
-  ack_deadline_seconds       = 60  # 60s for Gemini processing
+  ack_deadline_seconds       = 60 # 60s for Gemini processing
   message_retention_duration = "600s"
   retain_acked_messages      = false
 

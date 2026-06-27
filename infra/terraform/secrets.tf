@@ -7,7 +7,9 @@
 # Google Maps / Geocoding API key
 resource "google_secret_manager_secret" "maps_api_key" {
   secret_id = "janmat-maps-api-key"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.apis]
 }
 
@@ -15,14 +17,18 @@ resource "google_secret_manager_secret" "maps_api_key" {
 # For POC on Vertex AI, SA auth is preferred — this is a fallback
 resource "google_secret_manager_secret" "gemini_api_key" {
   secret_id = "janmat-gemini-api-key"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.apis]
 }
 
 # JWT secret for MP dashboard auth
 resource "google_secret_manager_secret" "jwt_secret" {
   secret_id = "janmat-jwt-secret"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   depends_on = [google_project_service.apis]
 }
 
