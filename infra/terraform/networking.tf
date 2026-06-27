@@ -56,7 +56,6 @@ resource "google_vpc_access_connector" "janmat_connector" {
 # ─────────────────────────────────────────
 # Firewall Rules
 # ─────────────────────────────────────────
-
 # Allow internal traffic within VPC
 resource "google_compute_firewall" "allow_internal" {
   name    = "janmat-allow-internal"

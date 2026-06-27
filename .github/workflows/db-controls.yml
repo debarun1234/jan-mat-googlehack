@@ -1,4 +1,4 @@
-name: DB Controls — Start / Stop
+﻿name: DB Controls â€” Start / Stop
 on:
   workflow_dispatch:
     inputs:
@@ -21,7 +21,8 @@ jobs:
     steps:
       - uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Start
         if: inputs.action == 'start'
