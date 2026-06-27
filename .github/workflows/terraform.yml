@@ -46,24 +46,27 @@ jobs:
       - name: Write terraform.tfvars
         run: |
           cat > terraform.tfvars <<EOF
-          project_id      = "${{ secrets.GCP_PROJECT_ID }}"
-          region          = "asia-south1"
-          zone            = "asia-south1-a"
-          environment     = "poc"
-          db_password     = "${{ secrets.DB_PASSWORD }}"
-          db_name         = "janmat"
-          db_user         = "janmat_user"
-          db_stop_schedule  = "30 17 * * *"
+          project_id = "${{ secrets.GCP_PROJECT_ID }}"
+          region = "asia-south1"
+          zone = "asia-south1-a"
+          environment = "poc"
+          db_password = "${{ secrets.DB_PASSWORD }}"
+          db_name = "janmat"
+          db_user = "janmat_user"
+          db_stop_schedule = "30 17 * * *"
           db_start_schedule = "30 1 * * *"
-          gemini_model    = "gemini-2.5-flash-lite"
+          gemini_model = "gemini-2.5-flash-lite"
           constituency_id = "KA-BLR-NORTH-01"
           EOF
+          # Auto-format the generated tfvars so fmt -check passes
+          terraform fmt terraform.tfvars
 
       - name: terraform init
         run: terraform init -upgrade
 
       - name: terraform fmt check
-        run: terraform fmt -check -recursive
+        # Check only .tf files, not the generated .tfvars
+        run: terraform fmt -check -recursive -write=false $(find . -name "*.tf" | tr '\n' ' ')
 
       - name: terraform validate
         run: terraform validate
