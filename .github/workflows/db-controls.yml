@@ -1,4 +1,4 @@
-name: DB Controls â€” Start / Stop
+name: DB Controls Start / Stop
 on:
   workflow_dispatch:
     inputs:
