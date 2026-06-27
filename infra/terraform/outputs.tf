@@ -15,8 +15,28 @@ output "cloud_sql_instance_name" {
 }
 
 output "gcs_media_bucket" {
-  description = "GCS bucket name for citizen media uploads"
+  description = "GCS bucket for citizen media uploads"
   value       = google_storage_bucket.media.name
+}
+
+output "gcs_tfplans_bucket" {
+  description = "GCS bucket for Terraform plan artifacts (CI/CD)"
+  value       = google_storage_bucket.tfplans.name
+}
+
+output "gcs_logs_bucket" {
+  description = "GCS bucket for Cloud Run / audit logs"
+  value       = google_storage_bucket.logs.name
+}
+
+output "gcs_exports_bucket" {
+  description = "GCS bucket for MP CSV / report exports"
+  value       = google_storage_bucket.exports.name
+}
+
+output "github_ci_service_account" {
+  description = "GitHub Actions CI service account email"
+  value       = google_service_account.github_ci.email
 }
 
 output "bq_analytics_dataset" {

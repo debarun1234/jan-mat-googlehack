@@ -14,6 +14,8 @@ on:
 
 env:
   TF_VERSION: "1.9.x"
+  # Bucket name matches gcs.tf: janmat-tfplans-{project_id}
+  GCS_PLAN_BUCKET: "janmat-tfplans-${{ secrets.GCP_PROJECT_ID }}"
 
 jobs:
   terraform:
@@ -32,7 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Auth via Workload Identity (no SA key needed) ────────────
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -42,7 +43,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # ── Write tfvars from GitHub secrets ────────────────────────
       - name: Write terraform.tfvars
         run: |
           cat > terraform.tfvars <<EOF
@@ -58,25 +58,36 @@ jobs:
           gemini_model = "gemini-2.5-flash-lite"
           constituency_id = "KA-BLR-NORTH-01"
           EOF
-          # Auto-format the generated tfvars so fmt -check passes
           terraform fmt terraform.tfvars
 
       - name: terraform init
         run: terraform init -upgrade
 
       - name: terraform fmt check
-        # Check only .tf files, not the generated .tfvars
-        run: terraform fmt -check -recursive -write=false $(find . -name "*.tf" | tr '\n' ' ')
+        run: |
+          find . -name "*.tf" -exec terraform fmt -check {} +
 
       - name: terraform validate
         run: terraform validate
 
-      # ── PLAN — runs on every PR targeting master ─────────────────
+      # ── PLAN (PR only) — save plan to GCS for apply step ──────────
       - name: terraform plan
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         id: plan
-        run: terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
         continue-on-error: true
+
+      - name: Upload plan to GCS
+        if: github.event_name == 'pull_request' && steps.plan.outcome == 'success'
+        run: |
+          # Ensure bucket exists
+          gcloud storage buckets create gs://${{ env.GCS_PLAN_BUCKET }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --location=asia-south1 2>/dev/null || true
+          # Upload plan keyed by PR SHA
+          gcloud storage cp tfplan \
+            gs://${{ env.GCS_PLAN_BUCKET }}/pr-${{ github.event.pull_request.number }}/tfplan
 
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'
@@ -86,20 +97,45 @@ jobs:
             const fs = require('fs');
             const plan = fs.readFileSync('infra/terraform/plan_output.txt', 'utf8');
             const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n...(truncated)' : plan;
+            const outcome = '${{ steps.plan.outcome }}';
+            const icon = outcome === 'success' ? '✅' : '❌';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Terraform Plan\n\`\`\`hcl\n${truncated}\n\`\`\`\n*Run by @${{ github.actor }} on branch \`${{ github.head_ref }}\`*`
+              body: `## ${icon} Terraform Plan\n\`\`\`hcl\n${truncated}\n\`\`\`\n*Plan saved to GCS — apply runs automatically on merge to master.*`
             });
 
       - name: Fail if plan failed
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-      # ── APPLY — runs only on direct push/merge to master ─────────
-      - name: terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'  # apply only on merge to master
+      # ── APPLY (push to master only) — use saved plan from GCS ─────
+      - name: Find merged PR number
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        id: pr
+        run: |
+          PR_NUMBER=$(gh pr list --state merged --base master \
+            --json number,mergeCommit \
+            --jq ".[] | select(.mergeCommit.oid == \"${{ github.sha }}\") | .number" \
+            --repo ${{ github.repository }})
+          echo "number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download plan from GCS
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number != ''
+        run: |
+          gcloud storage cp \
+            gs://${{ env.GCS_PLAN_BUCKET }}/pr-${{ steps.pr.outputs.number }}/tfplan \
+            tfplan
+
+      - name: terraform apply (saved plan)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number != ''
+        run: terraform apply -auto-approve tfplan
+
+      - name: terraform apply (fresh plan — direct push without PR)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number == ''
         run: |
           terraform plan -out=tfplan
           terraform apply -auto-approve tfplan
