@@ -14,8 +14,8 @@ resource "google_cloud_run_v2_service" "backend" {
     service_account = google_service_account.backend.email
 
     scaling {
-      min_instance_count = 0  # Scale to zero overnight
-      max_instance_count = 3  # Cap for POC budget
+      min_instance_count = 0 # Scale to zero overnight
+      max_instance_count = 3 # Cap for POC budget
     }
 
     vpc_access {
@@ -32,7 +32,7 @@ resource "google_cloud_run_v2_service" "backend" {
           cpu    = "1"
           memory = "512Mi"
         }
-        cpu_idle = true  # Only allocate CPU during request processing (saves cost)
+        cpu_idle = true # Only allocate CPU during request processing (saves cost)
       }
 
       # Startup probe — wait for FastAPI to be ready

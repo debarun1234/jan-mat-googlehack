@@ -40,13 +40,13 @@ locals {
     "pubsub.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudscheduler.googleapis.com",
-    "aiplatform.googleapis.com",           # Vertex AI / Gemini
-    "speech.googleapis.com",               # Cloud Speech-to-Text
-    "translate.googleapis.com",            # Translation API
-    "maps-backend.googleapis.com",         # Google Maps Platform
-    "geocoding-backend.googleapis.com",    # Geocoding API
-    "vpcaccess.googleapis.com",            # Serverless VPC Access
-    "servicenetworking.googleapis.com",    # Private service connections
+    "aiplatform.googleapis.com",        # Vertex AI / Gemini
+    "speech.googleapis.com",            # Cloud Speech-to-Text
+    "translate.googleapis.com",         # Translation API
+    "maps-backend.googleapis.com",      # Google Maps Platform
+    "geocoding-backend.googleapis.com", # Geocoding API
+    "vpcaccess.googleapis.com",         # Serverless VPC Access
+    "servicenetworking.googleapis.com", # Private service connections
     "cloudresourcemanager.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",

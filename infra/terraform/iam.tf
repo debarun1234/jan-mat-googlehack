@@ -21,16 +21,16 @@ resource "google_service_account" "scheduler" {
 # ─────────────────────────────────────────
 locals {
   backend_roles = [
-    "roles/bigquery.dataEditor",        # Read/write BigQuery tables
-    "roles/bigquery.jobUser",           # Run BigQuery jobs
-    "roles/cloudsql.client",            # Connect to Cloud SQL
-    "roles/storage.objectCreator",      # Upload media to GCS
-    "roles/storage.objectViewer",       # Read media from GCS
-    "roles/pubsub.publisher",           # Publish to Pub/Sub topics
-    "roles/pubsub.subscriber",          # Subscribe to Pub/Sub topics
+    "roles/bigquery.dataEditor",          # Read/write BigQuery tables
+    "roles/bigquery.jobUser",             # Run BigQuery jobs
+    "roles/cloudsql.client",              # Connect to Cloud SQL
+    "roles/storage.objectCreator",        # Upload media to GCS
+    "roles/storage.objectViewer",         # Read media from GCS
+    "roles/pubsub.publisher",             # Publish to Pub/Sub topics
+    "roles/pubsub.subscriber",            # Subscribe to Pub/Sub topics
     "roles/secretmanager.secretAccessor", # Read secrets
-    "roles/aiplatform.user",            # Vertex AI / Gemini API
-    "roles/run.invoker",                # Allow Cloud Run to call itself (service-to-service)
+    "roles/aiplatform.user",              # Vertex AI / Gemini API
+    "roles/run.invoker",                  # Allow Cloud Run to call itself (service-to-service)
   ]
 }
 

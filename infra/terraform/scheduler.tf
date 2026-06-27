@@ -14,7 +14,7 @@
 resource "google_cloud_scheduler_job" "stop_db" {
   name             = "janmat-stop-db"
   description      = "Stop Cloud SQL to save credits overnight"
-  schedule         = var.db_stop_schedule  # "30 17 * * *" (UTC)
+  schedule         = var.db_stop_schedule # "30 17 * * *" (UTC)
   time_zone        = "Asia/Kolkata"
   attempt_deadline = "30s"
 
@@ -49,7 +49,7 @@ resource "google_cloud_scheduler_job" "stop_db" {
 resource "google_cloud_scheduler_job" "start_db" {
   name             = "janmat-start-db"
   description      = "Start Cloud SQL in the morning"
-  schedule         = var.db_start_schedule  # "30 1 * * *" (UTC)
+  schedule         = var.db_start_schedule # "30 1 * * *" (UTC)
   time_zone        = "Asia/Kolkata"
   attempt_deadline = "30s"
 

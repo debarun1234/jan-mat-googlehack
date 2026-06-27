@@ -51,7 +51,7 @@ output "pubsub_topics" {
 
 output "db_kill_restart_info" {
   description = "Commands to manually stop/start the database"
-  value = <<-EOT
+  value       = <<-EOT
     STOP DB:  gcloud sql instances patch ${google_sql_database_instance.janmat_db.name} --activation-policy=NEVER
     START DB: gcloud sql instances patch ${google_sql_database_instance.janmat_db.name} --activation-policy=ALWAYS
 

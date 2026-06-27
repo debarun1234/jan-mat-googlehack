@@ -1,12 +1,12 @@
 name: CI PR Checks
 on:
   pull_request:
-    branches: [main]
+    branches: [feature/**]
   push:
-    branches: [main]
+    branches: [master]
 jobs:
   backend:
-    name: Backend Â· lint + test
+    name: Backend Ã‚Â· lint + test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,7 +37,7 @@ jobs:
           if [ -d tests ]; then pytest tests/ -v --tb=short
           else echo "No tests yet"; fi
   dashboard:
-    name: Dashboard Â· install
+    name: Dashboard Ã‚Â· install
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,7 +51,7 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - run: npm ci --prefer-offline
   flutter:
-    name: Flutter Â· analyze
+    name: Flutter Ã‚Â· analyze
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
       - working-directory: citizen-app
         run: flutter analyze --no-fatal-infos
   terraform-validate:
-    name: Terraform Â· validate
+    name: Terraform Ã‚Â· validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
