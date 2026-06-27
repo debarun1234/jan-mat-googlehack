@@ -1,8 +1,13 @@
-﻿name: Cost Guard â€” Nightly Check
+name: Cost Guard - Nightly Budget Check
+
 on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
 jobs:
   cost-check:
     name: Resource Audit
@@ -13,17 +18,23 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SA }}
+
       - uses: google-github-actions/setup-gcloud@v2
+
       - name: Check Cloud SQL state
         id: db
         run: |
-          STATE=$(gcloud sql instances describe janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --format='value(state)' 2>/dev/null || echo "UNKNOWN")
+          STATE=$(gcloud sql instances describe janmat-db-poc \
+            --project=$PROJECT_ID \
+            --format='value(state)' 2>/dev/null || echo "UNKNOWN")
           echo "state=$STATE" >> $GITHUB_OUTPUT
           echo "Cloud SQL: $STATE"
+
       - name: Alert if DB running overnight
         if: steps.db.outputs.state == 'RUNNABLE'
         uses: actions/github-script@v7
@@ -32,9 +43,15 @@ jobs:
             const h = new Date().getUTCHours();
             if (h >= 18 || h <= 0) {
               github.rest.issues.create({
-                owner: context.repo.owner, repo: context.repo.repo,
-                title: 'âš ï¸ Cloud SQL running overnight â€” cost alert',
-                body: 'DB is RUNNABLE outside business hours. Stop via Actions â†’ DB Controls â†’ Stop.',
-                labels: ['cost','infra']
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Cloud SQL running overnight - cost alert',
+                body: 'DB is RUNNABLE outside business hours. Stop via Actions -> DB Controls -> Stop.',
+                labels: ['cost', 'infra']
               });
             }
+
+      - name: Summary
+        run: |
+          echo "Cloud SQL: ${{ steps.db.outputs.state }}"
+          echo "Checked: $(date -u)"

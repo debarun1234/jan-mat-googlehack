@@ -1,4 +1,4 @@
-﻿name: Terraform â€” Plan / Apply
+name: Terraform â€” Plan / Apply
 on:
   pull_request:
     branches: [main]

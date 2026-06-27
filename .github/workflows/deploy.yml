@@ -1,4 +1,4 @@
-﻿name: Deploy â€” Backend to Cloud Run
+name: Deploy â€” Backend to Cloud Run
 on:
   push:
     branches: [main]
