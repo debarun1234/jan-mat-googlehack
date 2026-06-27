@@ -1,0 +1,97 @@
+# ── Secrets & credentials (NEVER commit these) ──────────────────────
+.db_password
+*.db_password
+infra/terraform/terraform.tfvars
+backend/.env
+dashboard/.env
+citizen-app/.env
+*.env
+.env.*
+!.env.example
+
+# ── Terraform ────────────────────────────────────────────────────────
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.lock.hcl
+tfplan
+infra/terraform/.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# ── Node.js ──────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+dashboard/public/bundle.js
+
+# ── Flutter / Dart ───────────────────────────────────────────────────
+citizen-app/.dart_tool/
+citizen-app/.flutter-plugins
+citizen-app/.flutter-plugins-dependencies
+citizen-app/.packages
+citizen-app/build/
+citizen-app/android/.gradle/
+citizen-app/android/local.properties
+citizen-app/android/app/google-services.json
+citizen-app/ios/Pods/
+citizen-app/ios/Flutter/Flutter.framework
+citizen-app/ios/Flutter/Flutter.podspec
+citizen-app/ios/.symlinks/
+citizen-app/web/
+*.g.dart
+
+# ── Google credentials / service accounts ───────────────────────────
+*.json
+!citizen-app/android/app/google-services.json.example
+service-account*.json
+gcp-key*.json
+credentials*.json
+
+# ── OS ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# ── IDE ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.iws
+
+# ── Docker ───────────────────────────────────────────────────────────
+*.dockerignore
+.docker/
+
+# ── Logs ─────────────────────────────────────────────────────────────
+*.log
+logs/

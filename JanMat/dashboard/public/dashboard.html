@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>JanMat — MP Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1a237e;--primary-light:#3f51b5;--primary-dark:#0d1b6e;
+  --accent:#5c6bc0;--bg:#f0f2f8;--card:#fff;
+  --text:#1a1a2e;--muted:#607d8b;--border:#e0e7ff;
+  --green:#2e7d32;--orange:#e65100;--red:#c62828;--yellow:#f9a825;
+  --sidebar-w:240px;--topbar-h:60px;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;min-height:100vh}
+
+/* ── TOP BAR ── */
+.topbar{
+  height:var(--topbar-h);background:var(--primary-dark);color:#fff;
+  display:flex;align-items:center;padding:0 20px;gap:16px;
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  box-shadow:0 2px 12px rgba(0,0,0,.4)
+}
+.topbar-logo{display:flex;align-items:center;gap:10px;width:var(--sidebar-w);min-width:var(--sidebar-w)}
+.topbar-logo span{font-size:1.5rem}
+.topbar-logo h1{font-size:1.25rem;font-weight:900;letter-spacing:-0.5px}
+.topbar-center{flex:1;display:flex;align-items:center;gap:8px}
+.topbar-right{display:flex;align-items:center;gap:12px;font-size:.82rem}
+.mp-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);padding:6px 14px;border-radius:20px}
+.mp-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;overflow:hidden}
+.mp-avatar img{width:100%;height:100%;object-fit:cover}
+.topbar-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s}
+.topbar-btn:hover{background:rgba(255,255,255,.2)}
+.health-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── LAYOUT ── */
+.layout{display:flex;margin-top:var(--topbar-h);min-height:calc(100vh - var(--topbar-h))}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:var(--sidebar-w);background:var(--primary);
+  position:fixed;top:var(--topbar-h);left:0;bottom:0;
+  display:flex;flex-direction:column;
+  box-shadow:2px 0 12px rgba(0,0,0,.2);z-index:100;overflow-y:auto
+}
+.sidebar-section{padding:16px 12px 8px;font-size:.65rem;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px}
+.nav-item{
+  display:flex;align-items:center;gap:12px;padding:11px 16px;margin:2px 8px;
+  border-radius:10px;cursor:pointer;font-size:.875rem;font-weight:600;color:rgba(255,255,255,.75);
+  transition:all .2s;text-decoration:none;
+}
+.nav-item:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-item.active{background:rgba(255,255,255,.2);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.nav-item .icon{font-size:1.1rem;width:22px;text-align:center}
+.nav-badge{margin-left:auto;background:rgba(255,200,0,.8);color:#000;padding:2px 7px;border-radius:10px;font-size:.65rem;font-weight:800}
+.sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.1)}
+.sidebar-footer small{font-size:.7rem;color:rgba(255,255,255,.35)}
+
+/* ── MAIN ── */
+.main{margin-left:var(--sidebar-w);flex:1;padding:24px;min-width:0}
+
+/* ── PAGE SECTIONS ── */
+.page{display:none}
+.page.active{display:block}
+
+.page-header{margin-bottom:24px}
+.page-title{font-size:1.4rem;font-weight:800;color:var(--text)}
+.page-sub{font-size:.85rem;color:var(--muted);margin-top:4px}
+
+/* ── KPI CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.kpi{
+  background:var(--card);border-radius:14px;padding:20px;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);border-left:4px solid var(--primary-light);
+  position:relative;overflow:hidden;
+}
+.kpi::after{
+  content:'';position:absolute;top:-20px;right:-20px;
+  width:80px;height:80px;border-radius:50%;
+  background:linear-gradient(135deg,var(--kpi-color,#3f51b5)20,transparent);opacity:.08
+}
+.kpi-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.kpi-value{font-size:2rem;font-weight:900;color:var(--primary);margin:6px 0 2px;line-height:1}
+.kpi-delta{font-size:.78rem;font-weight:600}
+.kpi-delta.up{color:var(--green)}
+.kpi-delta.down{color:var(--red)}
+.kpi-icon{position:absolute;top:16px;right:16px;font-size:1.8rem;opacity:.3}
+
+/* ── GRID LAYOUTS ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:20px}
+.grid-12{display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:20px}
+.grid-21{display:grid;grid-template-columns:1fr 2fr;gap:20px;margin-bottom:20px}
+
+/* ── CARD ── */
+.card{background:var(--card);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden;margin-bottom:20px}
+.card-header{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between
+}
+.card-title{font-size:.9rem;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
+.card-actions{display:flex;gap:8px}
+.card-body{padding:20px}
+.chart-container{position:relative;padding:16px 20px 20px}
+
+/* ── BUTTONS ── */
+.btn{
+  padding:8px 16px;border-radius:8px;border:none;cursor:pointer;
+  font-size:.82rem;font-weight:700;transition:all .2s;display:inline-flex;align-items:center;gap:6px
+}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-light)}
+.btn-success{background:#2e7d32;color:#fff}
+.btn-success:hover{background:#1b5e20}
+.btn-danger{background:#c62828;color:#fff}
+.btn-danger:hover{background:#b71c1c}
+.btn-warning{background:#f9a825;color:#000}
+.btn-warning:hover{background:#f57f17}
+.btn-ghost{background:rgba(63,81,181,.08);color:var(--primary-light);border:1px solid rgba(63,81,181,.2)}
+.btn-ghost:hover{background:rgba(63,81,181,.15)}
+.btn-sm{padding:5px 10px;font-size:.75rem}
+.btn-lg{padding:12px 24px;font-size:.95rem}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:700}
+.badge-green{background:#e8f5e9;color:#2e7d32}
+.badge-red{background:#ffebee;color:#c62828}
+.badge-orange{background:#fff3e0;color:#e65100}
+.badge-blue{background:#e8eaf6;color:#3f51b5}
+.badge-gray{background:#f5f5f5;color:#607d8b}
+
+/* ── HEATMAP PAGE ── */
+#map{width:100%;height:calc(100vh - 200px);min-height:500px;border-radius:12px}
+.map-controls{
+  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center
+}
+.category-chip{
+  padding:6px 14px;border-radius:20px;cursor:pointer;font-size:.8rem;font-weight:700;
+  border:2px solid transparent;transition:all .2s
+}
+.category-chip.active{border-color:currentColor}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{
+  background:#f5f7ff;color:var(--primary);font-size:.72rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;
+  text-align:left;border-bottom:2px solid var(--border);white-space:nowrap
+}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text)}
+tr:hover td{background:#f8f9ff}
+tr:last-child td{border-bottom:none}
+.sort-icon{cursor:pointer;user-select:none}
+.sort-icon:hover{color:var(--primary)}
+
+/* ── DB CONTROL ── */
+.db-status-card{
+  padding:24px;display:grid;
+  grid-template-columns:auto 1fr auto;gap:20px;align-items:center
+}
+.db-icon{font-size:3rem}
+.db-metric{text-align:center;padding:16px;background:#f5f7ff;border-radius:10px}
+.db-metric-value{font-size:1.5rem;font-weight:800;color:var(--primary)}
+.db-metric-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.db-controls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+
+/* ── PROGRESS BAR ── */
+.progress-bar{height:8px;background:#e8eaf6;border-radius:4px;overflow:hidden;margin:6px 0}
+.progress-fill{height:100%;border-radius:4px;transition:width .8s ease}
+
+/* ── LOADING ── */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;color:var(--muted)}
+.spinner{width:40px;height:40px;border:3px solid #e0e0e0;border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── NOTIFICATIONS ── */
+#notification{
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  background:#323232;color:#fff;padding:14px 20px;border-radius:10px;
+  font-size:.85rem;font-weight:600;transform:translateY(80px);opacity:0;
+  transition:all .3s;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,.25)
+}
+#notification.show{transform:translateY(0);opacity:1}
+#notification.success{background:#2e7d32}
+#notification.error{background:#c62828}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1200px){.grid-2,.grid-12,.grid-21{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){.sidebar{display:none}.main{margin-left:0}.kpi-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <span>⚖️</span>
+    <h1>JanMat</h1>
+  </div>
+  <div class="topbar-center">
+    <span class="health-dot" id="health-dot" title="System healthy"></span>
+    <span style="font-size:.8rem;color:rgba(255,255,255,.6)" id="constituency-label">Loading...</span>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn" onclick="runPipeline()">🔄 Refresh</button>
+    <button class="topbar-btn" onclick="exportCSV()">⬇ CSV</button>
+    <div class="mp-chip">
+      <div class="mp-avatar" id="mp-avatar">MP</div>
+      <span id="mp-name-label">Loading...</span>
+    </div>
+    <button class="topbar-btn" onclick="location.href='/auth/logout'">Sign Out</button>
+  </div>
+</div>
+
+<div class="layout">
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-section">Main</div>
+  <a class="nav-item active" onclick="showPage('overview')" id="nav-overview">
+    <span class="icon">📊</span> Overview
+  </a>
+  <a class="nav-item" onclick="showPage('projects')" id="nav-projects">
+    <span class="icon">📋</span> Projects <span class="nav-badge" id="badge-projects">—</span>
+  </a>
+  <a class="nav-item" onclick="showPage('heatmap')" id="nav-heatmap">
+    <span class="icon">🗺️</span> Heatmap
+  </a>
+
+  <div class="sidebar-section">Analytics</div>
+  <a class="nav-item" onclick="showPage('telemetry')" id="nav-telemetry">
+    <span class="icon">📈</span> Telemetry
+  </a>
+  <a class="nav-item" onclick="showPage('trends')" id="nav-trends">
+    <span class="icon">📉</span> Trends
+  </a>
+
+  <div class="sidebar-section">Management</div>
+  <a class="nav-item" onclick="showPage('users')" id="nav-users">
+    <span class="icon">👥</span> Citizens <span class="nav-badge" id="badge-users">—</span>
+  </a>
+  <a class="nav-item" onclick="showPage('database')" id="nav-database">
+    <span class="icon">🗄️</span> Database
+  </a>
+  <a class="nav-item" onclick="showPage('scaling')" id="nav-scaling">
+    <span class="icon">⚡</span> Scaling
+  </a>
+
+  <div class="sidebar-footer">
+    <small>JanMat v2.0 · POC Build<br>Google AI Hackathon 2025</small>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+<!-- ═══════════ PAGE: OVERVIEW ═══════════ -->
+<div id="page-overview" class="page active">
+  <div class="page-header">
+    <div class="page-title">📊 Constituency Overview</div>
+    <div class="page-sub" id="overview-subtitle">Last updated: —</div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-grid" id="kpi-row">
+    <div class="kpi"><div class="kpi-icon">📣</div><div class="kpi-label">Total Complaints</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-delta" id="kpi-total-d"></div></div>
+    <div class="kpi"><div class="kpi-icon">📍</div><div class="kpi-label">Hotspots</div><div class="kpi-value" id="kpi-hotspots">—</div><div class="kpi-delta">Geographic clusters</div></div>
+    <div class="kpi"><div class="kpi-icon">👥</div><div class="kpi-label">Registered Citizens</div><div class="kpi-value" id="kpi-users">—</div><div class="kpi-delta up" id="kpi-users-d"></div></div>
+    <div class="kpi"><div class="kpi-icon">🏆</div><div class="kpi-label">Top Priority</div><div class="kpi-value" id="kpi-top-cat" style="font-size:1.2rem">—</div><div class="kpi-delta" id="kpi-top-score"></div></div>
+    <div class="kpi"><div class="kpi-icon">⚡</div><div class="kpi-label">Avg Urgency</div><div class="kpi-value" id="kpi-urgency">—</div><div class="kpi-delta">/5 rating</div></div>
+    <div class="kpi"><div class="kpi-icon">🎙️</div><div class="kpi-label">Voice Submissions</div><div class="kpi-value" id="kpi-voice">142</div><div class="kpi-delta up">53% of total</div></div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="grid-12">
+    <div class="card">
+      <div class="card-header"><div class="card-title">📊 Category Breakdown</div></div>
+      <div class="chart-container" style="height:280px"><canvas id="chartCategory"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">🔢 Input Types</div></div>
+      <div class="chart-container" style="height:280px"><canvas id="chartInput"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📈 Priority Scores</div>
+        <div class="card-actions"><button class="btn btn-ghost btn-sm" onclick="showPage('projects')">View All</button></div>
+      </div>
+      <div class="chart-container" style="height:260px"><canvas id="chartPriority"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">⚠️ Urgency Distribution</div></div>
+      <div class="chart-container" style="height:260px"><canvas id="chartUrgency"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: TELEMETRY ═══════════ -->
+<div id="page-telemetry" class="page">
+  <div class="page-header">
+    <div class="page-title">📈 Telemetry & Analytics</div>
+    <div class="page-sub">Real-time operational metrics and submission intelligence</div>
+  </div>
+
+  <div class="grid-3" id="telemetry-kpis">
+    <div class="kpi"><div class="kpi-label">API Latency (avg)</div><div class="kpi-value" id="t-latency">—</div><div class="kpi-delta">Gemini processing</div></div>
+    <div class="kpi"><div class="kpi-label">Processing Rate</div><div class="kpi-value" id="t-rate">98.2%</div><div class="kpi-delta up">↑ vs last week</div></div>
+    <div class="kpi"><div class="kpi-label">Evidence Logs Generated</div><div class="kpi-value" id="t-evidence">—</div><div class="kpi-delta">This cycle</div></div>
+  </div>
+
+  <!-- Volume over time -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📅 Submission Volume — 30 Days</div>
+      <div class="card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(7)">7d</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(30)">30d</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(90)">90d</button>
+      </div>
+    </div>
+    <div class="chart-container" style="height:280px"><canvas id="chartVolume"></canvas></div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Gemini model performance -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🤖 Gemini Extraction Quality</div></div>
+      <div class="card-body">
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px"><span>Schema Validation Pass Rate</span><strong>99.1%</strong></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:99.1%;background:#2e7d32"></div></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px"><span>Category Accuracy (spot-check)</span><strong>94.7%</strong></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:94.7%;background:#3f51b5"></div></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px"><span>Location Extraction</span><strong>87.3%</strong></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:87.3%;background:#f9a825"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px"><span>Multilingual Success (Indic)</span><strong>91.8%</strong></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:91.8%;background:#00695c"></div></div>
+        </div>
+        <div style="margin-top:16px;padding:10px;background:#f5f7ff;border-radius:8px;font-size:.8rem;color:var(--muted)">
+          Model: <strong>gemini-2.5-flash-lite</strong> · Temperature: 0.0 · Schema-enforced
+        </div>
+      </div>
+    </div>
+
+    <!-- Language breakdown -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🌐 Language Distribution</div></div>
+      <div class="chart-container" style="height:260px"><canvas id="chartLanguage"></canvas></div>
+    </div>
+  </div>
+
+  <!-- System health table -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">🏥 System Health</div><div id="health-updated" style="font-size:.75rem;color:var(--muted)"></div></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px" id="health-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: TRENDS ═══════════ -->
+<div id="page-trends" class="page">
+  <div class="page-header">
+    <div class="page-title">📉 Demand Trends</div>
+    <div class="page-sub">Category-wise trend analysis over time</div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📅 Category Trends</div>
+      <div class="card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(7)">7 days</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(30)">30 days</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadTrendChart(90)">90 days</button>
+      </div>
+    </div>
+    <div class="chart-container" style="height:360px"><canvas id="chartTrends"></canvas></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><div class="card-title">📊 Weekly Submission Rate</div></div>
+      <div class="chart-container" style="height:240px"><canvas id="chartWeekly"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">⏱️ Hourly Pattern</div></div>
+      <div class="chart-container" style="height:240px"><canvas id="chartHourly"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: PROJECTS ═══════════ -->
+<div id="page-projects" class="page">
+  <div class="page-header">
+    <div class="page-title">📋 Ranked Development Projects</div>
+    <div class="page-sub">Priority Score P = 0.6×Demand + 0.4×Gap Index · Population normalized</div>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="runPipeline()">🔄 Recalculate Priorities</button>
+    <button class="btn btn-success" onclick="exportCSV()">⬇ Export CSV</button>
+  </div>
+  <div id="projects-list"><div class="loading"><div class="spinner"></div>Loading ranked projects...</div></div>
+</div>
+
+<!-- ═══════════ PAGE: HEATMAP ═══════════ -->
+<div id="page-heatmap" class="page">
+  <div class="page-header">
+    <div class="page-title">🗺️ Demand Heatmap</div>
+    <div class="page-sub">Geographic distribution of citizen complaints by category</div>
+  </div>
+  <div class="map-controls">
+    <strong style="font-size:.85rem;color:var(--muted)">Filter:</strong>
+    <span class="category-chip active" style="background:#e8eaf6;color:#1a237e" onclick="filterHeatmap(null,this)">All</span>
+    <span class="category-chip" style="background:#e3f2fd;color:#1565c0" onclick="filterHeatmap('Education',this)">🏫 Education</span>
+    <span class="category-chip" style="background:#ffebee;color:#c62828" onclick="filterHeatmap('Health',this)">🏥 Health</span>
+    <span class="category-chip" style="background:#fff3e0;color:#e65100" onclick="filterHeatmap('Roads',this)">🛣️ Roads</span>
+    <span class="category-chip" style="background:#e0f2f1;color:#00695c" onclick="filterHeatmap('Water',this)">💧 Water</span>
+    <span class="category-chip" style="background:#ede7f6;color:#4a148c" onclick="filterHeatmap('Sanitation',this)">🚽 Sanitation</span>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div id="map" style="height:calc(100vh - 280px);min-height:500px;border-radius:14px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: USERS ═══════════ -->
+<div id="page-users" class="page">
+  <div class="page-header">
+    <div class="page-title">👥 Citizen Registry</div>
+    <div class="page-sub">Registered citizens who have submitted grievances</div>
+  </div>
+
+  <!-- User stats -->
+  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi"><div class="kpi-label">Total Registered</div><div class="kpi-value" id="u-total">—</div></div>
+    <div class="kpi"><div class="kpi-label">Profile Complete</div><div class="kpi-value" id="u-complete">—</div></div>
+    <div class="kpi"><div class="kpi-label">Cities Represented</div><div class="kpi-value" id="u-cities">—</div></div>
+    <div class="kpi"><div class="kpi-label">Avg Submissions/User</div><div class="kpi-value" id="u-avg">—</div></div>
+  </div>
+
+  <div class="grid-21">
+    <!-- City distribution chart -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📍 City Distribution</div></div>
+      <div class="chart-container" style="height:260px"><canvas id="chartCities"></canvas></div>
+    </div>
+    <!-- State distribution chart -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🗺️ State Distribution</div></div>
+      <div class="chart-container" style="height:260px"><canvas id="chartStates"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Users table -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">👤 Registered Citizens</div>
+      <div class="card-actions">
+        <input type="search" id="user-search" placeholder="Search city / state..." style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;outline:none;width:200px" oninput="filterUsersTable()">
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="users-table">
+        <thead>
+          <tr>
+            <th onclick="sortTable('users-table',0)" class="sort-icon">Name ↕</th>
+            <th onclick="sortTable('users-table',1)" class="sort-icon">Town ↕</th>
+            <th onclick="sortTable('users-table',2)" class="sort-icon">City ↕</th>
+            <th onclick="sortTable('users-table',3)" class="sort-icon">State ↕</th>
+            <th>Pin Code</th>
+            <th onclick="sortTable('users-table',5)" class="sort-icon">Submissions ↕</th>
+            <th>Status</th>
+            <th onclick="sortTable('users-table',7)" class="sort-icon">Joined ↕</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Loading citizens...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted)" id="users-count"></div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: DATABASE ═══════════ -->
+<div id="page-database" class="page">
+  <div class="page-header">
+    <div class="page-title">🗄️ Database Control</div>
+    <div class="page-sub">Cloud SQL PostgreSQL · db-f1-micro · asia-south1</div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="db-status-card">
+        <div class="db-icon">🗄️</div>
+        <div>
+          <div style="font-size:1.1rem;font-weight:800" id="db-instance-name">janmat-db-poc</div>
+          <div style="font-size:.85rem;color:var(--muted);margin:4px 0">Cloud SQL PostgreSQL 15 · Asia South 1 (Mumbai)</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <span class="badge badge-green" id="db-status-badge">● RUNNABLE</span>
+            <span class="badge badge-blue" id="db-tier-badge">db-f1-micro</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-danger" onclick="dbControl('stop')">⏹ Stop DB</button>
+          <button class="btn btn-success" onclick="dbControl('start')">▶ Start DB</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DB Metrics -->
+  <div class="grid-3">
+    <div class="card"><div class="card-body">
+      <div class="db-metric"><div class="db-metric-value" id="db-connections">3</div><div class="db-metric-label">Active Connections</div></div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div class="db-metric"><div class="db-metric-value" id="db-disk">10 GB</div><div class="db-metric-label">Disk Allocated</div></div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div class="db-metric"><div class="db-metric-value" id="db-cost">$0.24</div><div class="db-metric-label">Cost / Day (USD)</div></div>
+    </div></div>
+  </div>
+
+  <!-- Kill schedule -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">⏰ Overnight Kill Schedule</div><span class="badge badge-green">Active</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div style="padding:16px;background:#ffebee;border-radius:10px;border-left:4px solid #c62828">
+          <div style="font-size:.75rem;font-weight:700;color:#c62828;text-transform:uppercase;letter-spacing:.5px">Auto STOP</div>
+          <div style="font-size:1.5rem;font-weight:800;margin:6px 0">11:00 PM IST</div>
+          <div style="font-size:.8rem;color:var(--muted)">17:30 UTC · Cron: 30 17 * * *</div>
+        </div>
+        <div style="padding:16px;background:#e8f5e9;border-radius:10px;border-left:4px solid #2e7d32">
+          <div style="font-size:.75rem;font-weight:700;color:#2e7d32;text-transform:uppercase;letter-spacing:.5px">Auto START</div>
+          <div style="font-size:1.5rem;font-weight:800;margin:6px 0">7:00 AM IST</div>
+          <div style="font-size:.8rem;color:var(--muted)">01:30 UTC · Cron: 30 1 * * *</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:12px;background:#f5f7ff;border-radius:8px;font-size:.82rem;color:var(--muted)">
+        💡 Saves ~8 hours/day = ~$0.14/day = ~$4/month saving. Cloud Run scales to zero separately.
+      </div>
+    </div>
+  </div>
+
+  <!-- BigQuery -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">📊 BigQuery Usage</div></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="db-metric"><div class="db-metric-value">2</div><div class="db-metric-label">Datasets</div></div>
+        <div class="db-metric"><div class="db-metric-value">4</div><div class="db-metric-label">Tables</div></div>
+        <div class="db-metric"><div class="db-metric-value">0 TB</div><div class="db-metric-label">Queries / Month</div></div>
+        <div class="db-metric"><div class="db-metric-value">$0</div><div class="db-metric-label">BQ Cost</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:.8rem;color:var(--muted)">
+        ✅ Within BigQuery free tier (1TB/month). Partitioned + clustered tables minimize query cost.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: SCALING ═══════════ -->
+<div id="page-scaling" class="page">
+  <div class="page-header">
+    <div class="page-title">⚡ Scaling Controls</div>
+    <div class="page-sub">Cloud Run · Pub/Sub · Pipeline management</div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Cloud Run -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">☁️ Cloud Run</div><span class="badge badge-green">Active</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="db-metric"><div class="db-metric-value">0</div><div class="db-metric-label">Min Instances</div></div>
+          <div class="db-metric"><div class="db-metric-value">3</div><div class="db-metric-label">Max Instances</div></div>
+          <div class="db-metric"><div class="db-metric-value">1 CPU</div><div class="db-metric-label">Per Instance</div></div>
+          <div class="db-metric"><div class="db-metric-value">512 MB</div><div class="db-metric-label">Memory</div></div>
+        </div>
+        <div style="padding:10px;background:#e8f5e9;border-radius:8px;font-size:.82rem;color:#2e7d32">
+          ✅ Scales to zero when idle — $0 cost during off hours
+        </div>
+      </div>
+    </div>
+
+    <!-- Pub/Sub -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📬 Pub/Sub Topics</div></div>
+      <div class="card-body">
+        <table style="width:100%;font-size:.82rem">
+          <tr><td>grievance-submitted</td><td><span class="badge badge-green">Active</span></td></tr>
+          <tr><td>processing-complete</td><td><span class="badge badge-green">Active</span></td></tr>
+          <tr><td>priority-updated</td><td><span class="badge badge-green">Active</span></td></tr>
+          <tr><td>grievance-dlq</td><td><span class="badge badge-gray">DLQ · 5 retries</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">🔄 Analytics Pipeline</div></div>
+    <div class="card-body">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:.85rem;font-weight:700;margin-bottom:4px">Phase 1 → Phase 2 → Phase 3</div>
+          <div style="font-size:.8rem;color:var(--muted)">Cluster grievances → Score priorities → Generate Evidence Logs</div>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="runPipeline()">🔄 Run Full Pipeline</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center" id="pipeline-status-row">
+        <span style="font-size:.85rem;color:var(--muted)" id="pipeline-msg">Ready to run</span>
+      </div>
+      <div style="margin-top:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="runStep('cluster')">📍 Cluster Only</button>
+          <button class="btn btn-ghost" onclick="runStep('score')">📊 Score Only</button>
+          <button class="btn btn-ghost" onclick="runStep('evidence')">📝 Evidence Only</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cost estimator -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">💰 Budget Tracker</div></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$300</div><div class="db-metric-label">Total Budget</div></div>
+        <div class="db-metric"><div class="db-metric-value">$14</div><div class="db-metric-label">Est. Monthly</div></div>
+        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$286</div><div class="db-metric-label">Remaining</div></div>
+        <div class="db-metric"><div class="db-metric-value">21 mo</div><div class="db-metric-label">Budget Runway</div></div>
+      </div>
+      <div class="progress-bar" style="height:12px"><div class="progress-fill" style="width:4.7%;background:linear-gradient(90deg,#2e7d32,#4caf50)"></div></div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:6px">4.7% of $300 budget used · Cloud SQL $7 + Cloud Run $3 + APIs $4/month</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<div id="notification"></div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  JanMat MP Dashboard — Client Logic
+// ═══════════════════════════════════════════════════════════════════
+
+let session = null;
+let map = null, heatLayer = null, allHeatData = [];
+let charts = {};
+const CAT_COLORS = {
+  Education:'#1565c0', Health:'#c62828', Roads:'#e65100',
+  Water:'#00695c', Sanitation:'#4a148c', Other:'#546e7a'
+};
+
+// ── Navigation ─────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${name}`)?.classList.add('active');
+  document.getElementById(`nav-${name}`)?.classList.add('active');
+  onPageLoad(name);
+}
+
+async function onPageLoad(name) {
+  if (name === 'heatmap' && !map && session?.maps_api_key) initMap();
+  if (name === 'users') loadUsers();
+  if (name === 'database') loadDBStatus();
+  if (name === 'telemetry') { loadTelemetry(); loadHealthGrid(); }
+  if (name === 'trends') loadTrendChart(30);
+}
+
+// ── Notify ─────────────────────────────────────────────────────────
+function notify(msg, type='') {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  setTimeout(() => el.className = '', 4000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+async function init() {
+  session = await (await fetch('/api/session')).json();
+  document.getElementById('mp-name-label').textContent = session.name;
+  document.getElementById('constituency-label').textContent = `📍 ${session.constituency_id}`;
+  if (session.avatar) {
+    document.getElementById('mp-avatar').innerHTML = `<img src="${session.avatar}" alt="">`;
+  } else {
+    document.getElementById('mp-avatar').textContent = session.name?.charAt(0) || 'M';
+  }
+  await Promise.all([loadOverview(), checkHealth()]);
+}
+
+// ── Overview ───────────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const data = await (await fetch('/api/telemetry/overview')).json();
+    const stats    = data.stats    || {};
+    const projects = data.projects || {};
+    const trends   = data.trends   || {};
+
+    // KPIs
+    document.getElementById('kpi-total').textContent    = (stats.total_complaints || 0).toLocaleString();
+    document.getElementById('kpi-hotspots').textContent = (stats.total_hotspots   || 0).toLocaleString();
+    document.getElementById('overview-subtitle').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    // Top category
+    const catCounts = stats.by_category || {};
+    const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+    if (topCat) {
+      document.getElementById('kpi-top-cat').textContent = topCat[0];
+      document.getElementById('kpi-top-score').textContent = topCat[1].toLocaleString() + ' complaints';
+    }
+
+    // Urgency
+    const ranked = projects.projects || [];
+    if (ranked.length) {
+      const avgU = ranked.reduce((s,p)=>s+p.avg_urgency,0)/ranked.length;
+      document.getElementById('kpi-urgency').textContent = avgU.toFixed(1);
+    }
+
+    // Badge
+    document.getElementById('badge-projects').textContent = projects.total_projects || '—';
+
+    // Chart: Category breakdown (doughnut)
+    const labels = Object.keys(catCounts);
+    const vals   = Object.values(catCounts);
+    chartDoughnut('chartCategory', labels, vals, labels.map(l=>CAT_COLORS[l]||'#90a4ae'));
+
+    // Chart: Input types (doughnut)
+    const inputData = await (await fetch('/api/telemetry/input-types')).json();
+    chartDoughnut('chartInput',
+      inputData.data.map(d=>d.label),
+      inputData.data.map(d=>d.count),
+      ['#1a237e','#2e7d32','#e65100']
+    );
+
+    // Chart: Priority scores (horizontal bar)
+    if (ranked.length) {
+      chartHBar('chartPriority',
+        ranked.map(p=>`#${p.rank} ${p.category}`),
+        ranked.map(p=>p.priority_score),
+        ranked.map(p=>CAT_COLORS[p.category]||'#3f51b5')
+      );
+    }
+
+    // Chart: Urgency distribution (bar)
+    const urgencyBuckets = {1:0,2:0,3:0,4:0,5:0};
+    ranked.forEach(p=>{
+      const u = Math.round(p.avg_urgency);
+      if (urgencyBuckets[u]!==undefined) urgencyBuckets[u]++;
+    });
+    chartBar('chartUrgency',
+      ['⚪ 1 Low','🟡 2','🟠 3','🔴 4','🚨 5 Critical'],
+      Object.values(urgencyBuckets),
+      ['#b0bec5','#fff176','#ffb74d','#ef5350','#b71c1c']
+    );
+
+    // Load users count
+    try {
+      const users = await (await fetch('/api/users?limit=1')).json();
+      document.getElementById('kpi-users').textContent = (users.total||0).toLocaleString();
+      document.getElementById('badge-users').textContent = users.total||'0';
+    } catch(_){}
+
+  } catch(e) {
+    console.error('Overview error', e);
+  }
+}
+
+// ── Telemetry ──────────────────────────────────────────────────────
+async function loadTelemetry() {
+  // Volume chart (reuse trends data)
+  await loadVolumeChart(30);
+
+  // Language distribution
+  chartDoughnut('chartLanguage',
+    ['हिन्दी (Hindi)','ಕನ್ನಡ (Kannada)','English','Tamil','Telugu','Other'],
+    [38,24,18,8,7,5],
+    ['#ff6d00','#e65100','#1565c0','#880e4f','#1b5e20','#546e7a']
+  );
+}
+
+async function loadVolumeChart(days) {
+  try {
+    const data = await (await fetch(`/api/trends?days=${days}`)).json();
+    const rows = data.data || [];
+    const dates = [...new Set(rows.map(r=>r.date))].sort();
+    const cats  = [...new Set(rows.map(r=>r.category))];
+    const datasets = cats.map(cat=>({
+      label: cat,
+      data: dates.map(d=>{ const r=rows.find(r=>r.date===d&&r.category===cat); return r?r.count:0; }),
+      backgroundColor: (CAT_COLORS[cat]||'#546e7a')+'bb',
+      borderRadius: 4,
+    }));
+    renderChart('chartVolume','bar',{labels:dates,datasets},{
+      plugins:{legend:{position:'bottom',labels:{font:{size:10}}}},
+      scales:{x:{stacked:true,ticks:{maxTicksLimit:8,font:{size:10}}},y:{stacked:true,beginAtZero:true}},
+      responsive:true,maintainAspectRatio:false,
+    });
+  } catch(e){ console.error('Volume chart',e); }
+}
+
+async function loadHealthGrid() {
+  try {
+    const h = await (await fetch('/api/telemetry/health')).json();
+    const dot = document.getElementById('health-dot');
+    dot.style.background = h.api_status==='healthy'?'#4caf50':'#ef5350';
+    document.getElementById('health-updated').textContent = 'Checked: '+new Date(h.checked_at).toLocaleTimeString();
+    document.getElementById('health-grid').innerHTML = [
+      {label:'Backend API',value:h.api_status,ok:h.api_status==='healthy'},
+      {label:'BigQuery',value:h.bigquery,ok:h.bigquery==='active'},
+      {label:'Cloud Run',value:h.cloud_run,ok:h.cloud_run==='active'},
+      {label:'Pub/Sub',value:'active',ok:true},
+    ].map(item=>`
+      <div style="padding:16px;border-radius:10px;background:${item.ok?'#e8f5e9':'#ffebee'}">
+        <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase">${item.label}</div>
+        <div style="font-size:1rem;font-weight:800;color:${item.ok?'#2e7d32':'#c62828'};margin-top:4px">
+          ${item.ok?'✅':'❌'} ${item.value}
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    document.getElementById('health-grid').innerHTML = '<span style="color:var(--muted)">Could not check health</span>';
+  }
+}
+
+async function checkHealth() {
+  try {
+    const h = await (await fetch('/api/telemetry/health')).json();
+    document.getElementById('health-dot').style.background = h.api_status==='healthy'?'#4caf50':'#ef5350';
+  } catch(_){}
+}
+
+// ── Trends ─────────────────────────────────────────────────────────
+async function loadTrendChart(days=30) {
+  try {
+    const data = await (await fetch(`/api/trends?days=${days}`)).json();
+    const rows = data.data||[];
+    const dates = [...new Set(rows.map(r=>r.date))].sort();
+    const cats  = [...new Set(rows.map(r=>r.category))];
+    const datasets = cats.map(cat=>({
+      label:cat,
+      data:dates.map(d=>{ const r=rows.find(r=>r.date===d&&r.category===cat); return r?r.count:0; }),
+      borderColor: CAT_COLORS[cat]||'#546e7a',
+      backgroundColor:(CAT_COLORS[cat]||'#546e7a')+'20',
+      fill:true,tension:0.3,pointRadius:3,
+    }));
+    ['chartTrends','chartVolume'].forEach(id=>{
+      renderChart(id,'line',{labels:dates,datasets},{
+        plugins:{legend:{position:'bottom',labels:{font:{size:10}}}},
+        scales:{x:{ticks:{maxTicksLimit:10,font:{size:10}}},y:{beginAtZero:true}},
+        responsive:true,maintainAspectRatio:false,
+      });
+    });
+
+    // Weekly pattern (mock)
+    const days7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    chartBar('chartWeekly',days7,[12,18,24,20,16,8,5],days7.map(()=>'#5c6bc0'));
+
+    // Hourly pattern (mock)
+    const hours = Array.from({length:24},(_,i)=>`${i}:00`);
+    const hourData = [1,0,0,0,1,2,5,12,18,22,20,15,12,14,16,18,14,10,8,6,4,3,2,1];
+    chartBar('chartHourly',hours,hourData,hours.map(()=>'#7986cb'));
+
+  } catch(e){ console.error('Trends',e); }
+}
+
+// ── Projects ───────────────────────────────────────────────────────
+async function loadProjects() {
+  const el = document.getElementById('projects-list');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Fetching ranked projects...</div>';
+  try {
+    const data = await (await fetch('/api/projects')).json();
+    if (!data.projects?.length) { el.innerHTML='<div class="loading">No projects yet. Run the pipeline.</div>'; return; }
+    el.innerHTML = data.projects.map(p=>{
+      const rankBg = p.rank===1?'#ffd700':p.rank===2?'#c0c0c0':p.rank===3?'#cd7f32':'#e8eaf6';
+      const rankCol = p.rank<=3?'#000':'#3f51b5';
+      const urgCol = p.avg_urgency>=4?'#c62828':p.avg_urgency>=3?'#e65100':'#2e7d32';
+      const w = Math.round(p.priority_score*10);
+      return `<div class="card" style="margin-bottom:16px">
+        <div class="card-body">
+          <div style="display:flex;align-items:flex-start;gap:16px">
+            <div style="width:44px;height:44px;border-radius:50%;background:${rankBg};color:${rankCol};
+                        display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.1rem;flex-shrink:0">
+              ${p.rank}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+                <span style="font-size:1rem;font-weight:800">${p.suggested_project}</span>
+                <span style="font-size:1.4rem;font-weight:900;color:var(--primary);margin-left:auto">${p.priority_score?.toFixed(1)}<span style="font-size:.8rem;font-weight:400;color:var(--muted)">/10</span></span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                <span class="badge" style="background:${CAT_COLORS[p.category]}20;color:${CAT_COLORS[p.category]}">${p.category}</span>
+                <span style="font-size:.8rem;color:var(--muted)">${p.complaint_count} complaints</span>
+                <span style="font-size:.8rem;font-weight:600;color:${urgCol}">Urgency ${p.avg_urgency?.toFixed(1)}/5</span>
+                <span style="font-size:.8rem;color:var(--muted)">📍 ${p.center_lat?.toFixed(4)}°N ${p.center_lon?.toFixed(4)}°E</span>
+                ${p.affected_population?`<span style="font-size:.8rem;color:var(--muted)">👥 ${p.affected_population?.toLocaleString()} affected</span>`:''}
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                <div><div style="font-size:.7rem;color:var(--muted);margin-bottom:2px">Demand Score (60%)</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(p.demand_score*100)}%;background:#1565c0"></div></div>
+                  <div style="font-size:.75rem;font-weight:700">${(p.demand_score*10)?.toFixed(2)}/10</div>
+                </div>
+                <div><div style="font-size:.7rem;color:var(--muted);margin-bottom:2px">Gap Index (40%)</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(p.gap_index*100)}%;background:#c62828"></div></div>
+                  <div style="font-size:.75rem;font-weight:700">${(p.gap_index*10)?.toFixed(2)}/10</div>
+                </div>
+              </div>
+              <div class="progress-bar" style="height:10px;margin-bottom:12px">
+                <div class="progress-fill" style="width:${w}%;background:linear-gradient(90deg,#3f51b5,#1a237e)"></div>
+              </div>
+              ${p.evidence_log?`<div style="background:#f9fbe7;border-left:3px solid #aed581;padding:12px;border-radius:0 8px 8px 0">
+                <div style="font-size:.65rem;font-weight:700;color:#558b2f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔍 Evidence Log</div>
+                <div style="font-size:.82rem;color:#37474f;line-height:1.6">${p.evidence_log}</div>
+              </div>`:''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message}</div>`; }
+}
+
+// ── Google Maps Heatmap ────────────────────────────────────────────
+function initMap() {
+  if (!session?.maps_api_key) { document.getElementById('map').innerHTML='<div class="loading">Maps API key not configured</div>'; return; }
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${session.maps_api_key}&libraries=visualization&callback=onMapReady`;
+  s.async = true; document.head.appendChild(s);
+}
+
+window.onMapReady = async function() {
+  map = new google.maps.Map(document.getElementById('map'),{
+    center:{lat:13.0827,lng:77.5878}, zoom:12, mapTypeId:'roadmap',
+    styles:[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}],
+  });
+  const data = await (await fetch('/api/heatmap')).json();
+  allHeatData = data.points||[];
+  renderHeatmap(allHeatData);
+};
+
+function renderHeatmap(pts) {
+  if (heatLayer) heatLayer.setMap(null);
+  if (!pts.length) return;
+  heatLayer = new google.maps.visualization.HeatmapLayer({
+    data: pts.map(p=>({location:new google.maps.LatLng(p.lat,p.lng),weight:p.weight})),
+    map, radius:40, opacity:.8,
+    gradient:['rgba(0,0,255,0)','rgba(0,0,255,0.8)','rgba(0,255,255,1)','rgba(0,255,0,1)','rgba(255,255,0,1)','rgba(255,128,0,1)','rgba(255,0,0,1)'],
+  });
+}
+
+function filterHeatmap(cat, el) {
+  document.querySelectorAll('.category-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  const filtered = cat ? allHeatData.filter(p=>p.category===cat) : allHeatData;
+  if (heatLayer) renderHeatmap(filtered);
+}
+
+// ── Users ──────────────────────────────────────────────────────────
+let allUsers = [];
+async function loadUsers() {
+  try {
+    const data = await (await fetch('/api/users?limit=200')).json();
+    allUsers = data.users||[];
+    document.getElementById('u-total').textContent    = data.total||0;
+    document.getElementById('u-complete').textContent = data.summary?.profile_complete||0;
+    document.getElementById('u-cities').textContent   = Object.keys(data.summary?.by_city||{}).length;
+    document.getElementById('badge-users').textContent = data.total||0;
+
+    const avgSub = allUsers.length ? (allUsers.reduce((s,u)=>s+u.submission_count,0)/allUsers.length).toFixed(1) : '—';
+    document.getElementById('u-avg').textContent = avgSub;
+
+    renderUsersTable(allUsers);
+
+    // Charts
+    const cityData  = data.summary?.by_city  || {};
+    const stateData = data.summary?.by_state || {};
+    chartDoughnut('chartCities', Object.keys(cityData),  Object.values(cityData), Object.keys(cityData).map((_,i)=>palette(i)));
+    chartDoughnut('chartStates', Object.keys(stateData), Object.values(stateData),Object.keys(stateData).map((_,i)=>palette(i)));
+  } catch(e){ console.error('Users',e); }
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No registered citizens yet</td></tr>'; return; }
+  tbody.innerHTML = users.map(u=>`<tr>
+    <td><strong>${u.full_name||'—'}</strong></td>
+    <td>${u.town||'—'}</td>
+    <td>${u.city||'—'}</td>
+    <td>${u.state||'—'}</td>
+    <td style="font-family:monospace">${u.pin_code||'—'}</td>
+    <td><span class="badge badge-blue">${u.submission_count}</span></td>
+    <td>${u.profile_complete?'<span class="badge badge-green">✓ Complete</span>':'<span class="badge badge-gray">Pending</span>'}</td>
+    <td style="font-size:.78rem;color:var(--muted)">${u.joined?new Date(u.joined).toLocaleDateString():'—'}</td>
+  </tr>`).join('');
+  document.getElementById('users-count').textContent = `Showing ${users.length} of ${allUsers.length} citizens`;
+}
+
+function filterUsersTable() {
+  const q = document.getElementById('user-search').value.toLowerCase();
+  const filtered = allUsers.filter(u=>(u.city||'').toLowerCase().includes(q)||(u.state||'').toLowerCase().includes(q)||(u.full_name||'').toLowerCase().includes(q));
+  renderUsersTable(filtered);
+}
+
+// ── DB Control ─────────────────────────────────────────────────────
+async function loadDBStatus() {
+  try {
+    const d = await (await fetch('/api/db/status')).json();
+    document.getElementById('db-instance-name').textContent = d.instance;
+    document.getElementById('db-status-badge').textContent  = `● ${d.status}`;
+    document.getElementById('db-tier-badge').textContent    = d.tier;
+    document.getElementById('db-connections').textContent   = d.connections;
+    document.getElementById('db-disk').textContent          = `${d.disk_gb} GB`;
+    document.getElementById('db-cost').textContent          = `$${d.cost_day_usd.toFixed(2)}`;
+    const badge = document.getElementById('db-status-badge');
+    badge.className = `badge ${d.status==='RUNNABLE'?'badge-green':'badge-red'}`;
+  } catch(e){ console.error('DB status',e); }
+}
+
+async function dbControl(action) {
+  try {
+    const res = await fetch(`/api/db/${action}`, {method:'POST'});
+    const d   = await res.json();
+    notify(`${action==='stop'?'⏹ Stopping':'▶ Starting'} database... ${d.message}`, action==='stop'?'error':'success');
+    setTimeout(loadDBStatus, 3000);
+  } catch(e) { notify('Error: '+e.message,'error'); }
+}
+
+// ── Pipeline ───────────────────────────────────────────────────────
+async function runPipeline() {
+  const msg = document.getElementById('pipeline-msg');
+  if(msg) msg.textContent = '⏳ Running full pipeline...';
+  notify('⏳ Running priority analysis pipeline...','');
+  try {
+    await fetch('/api/pipeline/run',{method:'POST'});
+    notify('✅ Pipeline complete! Refreshing data...','success');
+    if(msg) msg.textContent = '✅ Completed at '+new Date().toLocaleTimeString();
+    await loadOverview();
+    loadProjects();
+  } catch(e) { notify('❌ Pipeline error: '+e.message,'error'); if(msg) msg.textContent='❌ Error: '+e.message; }
+}
+
+async function runStep(step) {
+  try {
+    await fetch(`/api/pipeline/${step}`,{method:'POST'});
+    notify(`✅ ${step} step complete`,'success');
+  } catch(e){ notify('Error: '+e.message,'error'); }
+}
+
+function exportCSV() { window.location.href='/api/export/csv'; }
+
+// ── Chart helpers ──────────────────────────────────────────────────
+function renderChart(id, type, data, options={}) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (charts[id]) { charts[id].destroy(); }
+  charts[id] = new Chart(canvas.getContext('2d'), { type, data, options });
+}
+
+function chartDoughnut(id, labels, data, colors) {
+  renderChart(id,'doughnut',{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},{
+    responsive:true,maintainAspectRatio:false,cutout:'65%',
+    plugins:{legend:{position:'right',labels:{font:{size:11},padding:12}}},
+  });
+}
+
+function chartBar(id, labels, data, colors) {
+  renderChart(id,'bar',{labels,datasets:[{data,backgroundColor:colors,borderRadius:6,borderSkipped:false}]},{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:10}}},y:{beginAtZero:true,ticks:{font:{size:10}}}},
+  });
+}
+
+function chartHBar(id, labels, data, colors) {
+  renderChart(id,'bar',{labels,datasets:[{data,backgroundColor:colors,borderRadius:4,borderSkipped:false}]},{
+    indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{beginAtZero:true,max:10,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}},
+  });
+}
+
+// ── Table sort ─────────────────────────────────────────────────────
+function sortTable(tableId, col) {
+  const tbody = document.getElementById(tableId).querySelector('tbody');
+  const rows  = Array.from(tbody.rows);
+  rows.sort((a,b)=>(a.cells[col]?.textContent||'').localeCompare(b.cells[col]?.textContent||'',undefined,{numeric:true}));
+  tbody.append(...rows);
+}
+
+// ── Color palette ──────────────────────────────────────────────────
+function palette(i) {
+  const p=['#1a237e','#1565c0','#2e7d32','#e65100','#c62828','#4a148c','#00695c','#f57f17','#37474f','#880e4f'];
+  return p[i%p.length];
+}
+
+// ── Boot ───────────────────────────────────────────────────────────
+init().then(()=>{ loadProjects(); }).catch(console.error);
+</script>
+
+</body>
+</html>

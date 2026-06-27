@@ -1,0 +1,184 @@
+"""
+seed_bigquery.py — Load mock public infrastructure data into BigQuery
+
+Usage:
+    python infra/scripts/seed_bigquery.py --project YOUR_PROJECT_ID
+
+This seeds janmat_infrastructure.public_infrastructure with mock
+Census 2011 + NFHS-5 style data for Bangalore North constituency.
+"""
+
+import argparse
+from datetime import date
+from google.cloud import bigquery
+
+PROJECT_ID = None  # Set via --project arg
+DATASET_ID = "janmat_infrastructure"
+TABLE_ID   = "public_infrastructure"
+
+# ─────────────────────────────────────────
+# Mock data: Bangalore North constituency
+# Source: Census 2011 + NFHS-5 approximations
+# ─────────────────────────────────────────
+MOCK_ROWS = [
+    # ── Education ───────────────────────────────────────────────────────────
+    {
+        "village_id": "VIL-001", "village_name": "Yelahanka Village",
+        "latitude": 13.1007, "longitude": 77.5963,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-04",
+        "population": 12400, "category": "Education",
+        "primary_schools": 2, "secondary_schools": 0,
+        "school_enrollment_rate": 0.61,
+        "nearest_secondary_school_km": 8.2, "teen_travel_distance_km": 10.1,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-002", "village_name": "Kogilu Cross",
+        "latitude": 13.0912, "longitude": 77.6034,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-05",
+        "population": 8700, "category": "Education",
+        "primary_schools": 1, "secondary_schools": 0,
+        "school_enrollment_rate": 0.54,
+        "nearest_secondary_school_km": 6.5, "teen_travel_distance_km": 8.4,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-003", "village_name": "Jakkur Layout",
+        "latitude": 13.0750, "longitude": 77.6100,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-06",
+        "population": 15200, "category": "Education",
+        "primary_schools": 3, "secondary_schools": 1,
+        "school_enrollment_rate": 0.72,
+        "nearest_secondary_school_km": 3.1, "teen_travel_distance_km": 4.2,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "Census2011", "reference_year": 2011, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-004", "village_name": "Bagalur Village",
+        "latitude": 13.1450, "longitude": 77.6280,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-07",
+        "population": 6200, "category": "Education",
+        "primary_schools": 1, "secondary_schools": 0,
+        "school_enrollment_rate": 0.48,
+        "nearest_secondary_school_km": 12.3, "teen_travel_distance_km": 14.5,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    # ── Health ──────────────────────────────────────────────────────────────
+    {
+        "village_id": "VIL-001", "village_name": "Yelahanka Village",
+        "latitude": 13.1007, "longitude": 77.5963,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-04",
+        "population": 12400, "category": "Health",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": 0, "hospital_beds_per_1000": 0.4, "nearest_hospital_km": 7.8,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-004", "village_name": "Bagalur Village",
+        "latitude": 13.1450, "longitude": 77.6280,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-07",
+        "population": 6200, "category": "Health",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": 0, "hospital_beds_per_1000": 0.2, "nearest_hospital_km": 15.4,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    # ── Roads ───────────────────────────────────────────────────────────────
+    {
+        "village_id": "VIL-001", "village_name": "Yelahanka Village",
+        "latitude": 13.1007, "longitude": 77.5963,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-04",
+        "population": 12400, "category": "Roads",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": 3.2, "paved_road_coverage_pct": 0.38,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "OpenStreetMap", "reference_year": 2023, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-004", "village_name": "Bagalur Village",
+        "latitude": 13.1450, "longitude": 77.6280,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-07",
+        "population": 6200, "category": "Roads",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": 1.8, "paved_road_coverage_pct": 0.15,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": None, "open_defecation_free": None,
+        "data_source": "OpenStreetMap", "reference_year": 2023, "last_updated": "2024-01-01",
+    },
+    # ── Water ───────────────────────────────────────────────────────────────
+    {
+        "village_id": "VIL-001", "village_name": "Yelahanka Village",
+        "latitude": 13.1007, "longitude": 77.5963,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-04",
+        "population": 12400, "category": "Water",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": 0.42, "sanitation_coverage_pct": 0.55, "open_defecation_free": False,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    {
+        "village_id": "VIL-002", "village_name": "Kogilu Cross",
+        "latitude": 13.0912, "longitude": 77.6034,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-05",
+        "population": 8700, "category": "Water",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": 0.31, "sanitation_coverage_pct": 0.47, "open_defecation_free": False,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+    # ── Sanitation ──────────────────────────────────────────────────────────
+    {
+        "village_id": "VIL-004", "village_name": "Bagalur Village",
+        "latitude": 13.1450, "longitude": 77.6280,
+        "constituency_id": "KA-BLR-NORTH-01", "ward_id": "WARD-07",
+        "population": 6200, "category": "Sanitation",
+        "primary_schools": None, "secondary_schools": None, "school_enrollment_rate": None,
+        "nearest_secondary_school_km": None, "teen_travel_distance_km": None,
+        "health_centers": None, "hospital_beds_per_1000": None, "nearest_hospital_km": None,
+        "road_quality_score": None, "paved_road_coverage_pct": None,
+        "piped_water_access_pct": None, "sanitation_coverage_pct": 0.22, "open_defecation_free": False,
+        "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01",
+    },
+]
+
+
+def seed(project_id: str) -> None:
+    client = bigquery.Client(project=project_id)
+    table_ref = f"{project_id}.{DATASET_ID}.{TABLE_ID}"
+
+    errors = client.insert_rows_json(table_ref, MOCK_ROWS)
+    if errors:
+        print(f"❌ BigQuery insert errors: {errors}")
+        raise RuntimeError("Seed failed")
+
+    print(f"✅ Seeded {len(MOCK_ROWS)} rows into {table_ref}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project", required=True, help="GCP Project ID")
+    args = parser.parse_args()
+    seed(args.project)

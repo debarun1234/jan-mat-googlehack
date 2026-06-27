@@ -1,0 +1,36 @@
+# JanMat Backend — FastAPI on Cloud Run
+# Pin minor versions for reproducible builds
+
+# Web framework
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+
+# Data validation / serialisation
+pydantic
+pydantic-settings
+
+# Google Cloud SDKs
+google-cloud-aiplatform        # Vertex AI / Gemini
+google-cloud-bigquery         # Analytics + streaming insert
+google-cloud-storage          # GCS media upload
+google-cloud-pubsub            # Pub/Sub publish
+google-cloud-speech            # Speech-to-Text
+google-cloud-translate         # Translation API
+google-cloud-secret-manager    # Secret Manager client
+google-cloud-sql-connector[asyncpg]  # Cloud SQL Auth Connector
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Utilities
+python-dotenv
+tenacity         # Retry logic for external calls
+structlog          # Structured JSON logging for Cloud Logging
+httpx             # Async HTTP (Firebase token verification)

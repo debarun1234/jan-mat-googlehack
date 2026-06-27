@@ -1,0 +1,51 @@
+"""
+Central configuration — reads from environment variables injected by Cloud Run.
+All secrets come from Secret Manager (mounted as env vars via Terraform cloudrun.tf).
+"""
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # GCP
+    gcp_project_id: str
+    gcp_region: str = "asia-south1"
+
+    # Gemini / Vertex AI
+    gemini_model: str = "gemini-2.5-flash-lite"
+
+    # Cloud SQL (injected as DATABASE_URL from Secret Manager)
+    database_url: str  # postgresql+asyncpg://user:pass@host/db
+
+    # GCS
+    gcs_media_bucket: str
+
+    # Pub/Sub topics
+    pubsub_topic_grievance_submitted: str = "grievance-submitted"
+    pubsub_topic_processing_complete: str = "processing-complete"
+    pubsub_topic_priority_updated: str = "priority-updated"
+
+    # BigQuery
+    bq_analytics_dataset: str = "janmat_analytics"
+    bq_infrastructure_dataset: str = "janmat_infrastructure"
+
+    # Auth
+    jwt_secret: str
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480  # 8 hours
+
+    # App
+    constituency_id: str = "KA-BLR-NORTH-01"
+    cors_origins: list[str] = ["*"]
+    log_level: str = "INFO"
+
+
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings

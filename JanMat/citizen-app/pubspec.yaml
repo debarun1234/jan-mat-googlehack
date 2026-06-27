@@ -1,0 +1,48 @@
+name: janmat_citizen
+description: JanMat Citizen App — AI-driven constituency development platform.
+publish_to: 'none'
+version: 2.0.0+2
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Firebase — Phone OTP authentication
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+
+  # Google Maps + heatmap visualization
+  google_maps_flutter: ^2.9.0
+
+  # Audio recording
+  record: ^5.1.2
+  path_provider: ^2.1.4
+
+  # Image picking
+  image_picker: ^1.1.2
+
+  # Location GPS
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+
+  # State / storage
+  provider: ^6.1.2
+  shared_preferences: ^2.3.3
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+  # UI
+  cupertino_icons: ^1.0.8
+  pin_code_fields: ^8.0.1    # OTP input widget
+  country_code_picker: ^3.0.0 # Phone country code
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
