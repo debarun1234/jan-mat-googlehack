@@ -99,7 +99,7 @@ jobs:
 
       # ── APPLY — runs only on direct push/merge to master ─────────
       - name: terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'  # apply only on merge to master
         run: |
           terraform plan -out=tfplan
           terraform apply -auto-approve tfplan
