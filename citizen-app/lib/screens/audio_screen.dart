@@ -184,7 +184,7 @@ class _AudioSubmissionScreenState extends State<AudioSubmissionScreen>
                     color: _isRecording ? Colors.red : (_hasRecording ? Colors.green : const Color(0xFF1A237E)),
                     boxShadow: [
                       BoxShadow(
-                        color: (_isRecording ? Colors.red : const Color(0xFF1A237E)).withOpacity(0.3),
+                        color: (_isRecording ? Colors.red : const Color(0xFF1A237E)).withValues(alpha: 0.3),
                         blurRadius: 24,
                         spreadRadius: 8,
                       ),

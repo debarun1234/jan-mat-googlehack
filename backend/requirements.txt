@@ -19,7 +19,7 @@ google-cloud-pubsub            # Pub/Sub publish
 google-cloud-speech            # Speech-to-Text
 google-cloud-translate         # Translation API
 google-cloud-secret-manager    # Secret Manager client
-google-cloud-sql-connector[asyncpg]  # Cloud SQL Auth Connector
+cloud-sql-python-connector[asyncpg]  # Cloud SQL Auth Connector
 
 # Database
 sqlalchemy[asyncio]
@@ -27,6 +27,7 @@ asyncpg
 
 # Auth
 python-jose[cryptography]
+PyJWT
 passlib[bcrypt]
 
 # Utilities

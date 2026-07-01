@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.routers import analytics, dashboard, intake, users
+from app import demo as demo_router
 
 # ── Structured logging for Cloud Logging ──────────────────────────────
 structlog.configure(
@@ -75,10 +76,14 @@ def create_app() -> FastAPI:
     )
 
     # ── Routers ──────────────────────────────────────────────────────
-    app.include_router(intake.router)
-    app.include_router(analytics.router)
-    app.include_router(dashboard.router)
-    app.include_router(users.router)
+    if settings.demo_mode:
+        log.info("janmat_demo_mode", note="GCP calls disabled — returning mock data")
+        app.include_router(demo_router.router)
+    else:
+        app.include_router(intake.router)
+        app.include_router(analytics.router)
+        app.include_router(dashboard.router)
+        app.include_router(users.router)
 
     # ── Health check ─────────────────────────────────────────────────
     @app.get("/health", tags=["infra"])

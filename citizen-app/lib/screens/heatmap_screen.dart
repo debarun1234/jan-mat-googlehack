@@ -79,8 +79,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
         circleId: CircleId('${p.lat}_${p.lng}_${p.category}'),
         center: LatLng(p.lat, p.lng),
         radius: radius,
-        fillColor: color.withOpacity(opacity),
-        strokeColor: color.withOpacity(0.6),
+        fillColor: color.withValues(alpha: opacity),
+        strokeColor: color.withValues(alpha: 0.6),
         strokeWidth: 1,
       );
     }).toSet();
@@ -138,7 +138,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                 backgroundColor: const Color(0xFF1A2C42),
                 selectedColor: color,
                 checkmarkColor: Colors.white,
-                side: BorderSide(color: color.withOpacity(0.6)),
+                side: BorderSide(color: color.withValues(alpha: 0.6)),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               );
             },
@@ -180,9 +180,9 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                   children: [
                     const Text('Complaint Density', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    _legendRow(Colors.red.withOpacity(0.8),   'High'),
-                    _legendRow(Colors.orange.withOpacity(0.7), 'Medium'),
-                    _legendRow(Colors.blue.withOpacity(0.5),  'Low'),
+                    _legendRow(Colors.red.withValues(alpha: 0.8),   'High'),
+                    _legendRow(Colors.orange.withValues(alpha: 0.7), 'Medium'),
+                    _legendRow(Colors.blue.withValues(alpha: 0.5),  'Low'),
                   ],
                 ),
               ),
