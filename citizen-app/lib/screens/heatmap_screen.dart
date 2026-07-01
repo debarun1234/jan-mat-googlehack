@@ -28,7 +28,6 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   };
 
   bool _loading = true;
-  String? _error;
   String? _pinCode;
   List<HotspotPoint> _points = [];
   Set<Circle> _circles = {};
@@ -46,7 +45,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   }
 
   Future<void> _fetchHeatmap() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; });
     try {
       final svc = context.read<UserService>();
       final data = await svc.getHeatmap(
@@ -60,7 +59,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       // Use demo data if API unavailable
       _points = _demoPoints();
       _buildCircles();
-      _error = null; // Don't surface error, show demo data
+      // Don't surface error — fall back to demo data
     }
     setState(() => _loading = false);
   }

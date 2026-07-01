@@ -2,10 +2,10 @@
 Demo mode — returns realistic mock data when DEMO_MODE=true.
 Used for local Docker testing without GCP credentials.
 """
+
 import uuid
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["demo"])
 
@@ -168,6 +168,7 @@ _HOTSPOTS = [
 
 # ── Demo endpoints — mirror the real API contract ─────────────────────
 
+
 @router.post("/intake/text")
 async def demo_submit_text(body: dict):
     sid = f"sub-{uuid.uuid4().hex[:12]}"
@@ -212,7 +213,11 @@ async def demo_status(submission_id: str):
 
 @router.get("/analytics/heatmap")
 async def demo_heatmap(category: str = "All", constituency_id: str = "KA-BLR-NORTH-01"):
-    data = _HOTSPOTS if category == "All" else [h for h in _HOTSPOTS if h["category"] == category]
+    data = (
+        _HOTSPOTS
+        if category == "All"
+        else [h for h in _HOTSPOTS if h["category"] == category]
+    )
     return {"hotspots": data, "total": len(data), "demo": True}
 
 
@@ -222,7 +227,13 @@ async def demo_overview():
         "constituency_id": "KA-BLR-NORTH-01",
         "total_submissions": 134,
         "submissions_last_7d": 47,
-        "categories": {"Roads": 38, "Water": 31, "Sanitation": 23, "Education": 18, "Health": 24},
+        "categories": {
+            "Roads": 38,
+            "Water": 31,
+            "Sanitation": 23,
+            "Education": 18,
+            "Health": 24,
+        },
         "avg_urgency": 3.7,
         "hotspots_identified": 5,
         "top_category": "Roads",
@@ -238,7 +249,7 @@ async def demo_projects():
 @router.get("/dashboard/submissions")
 async def demo_submissions(limit: int = 20, offset: int = 0):
     return {
-        "submissions": _SUBMISSIONS[offset: offset + limit],
+        "submissions": _SUBMISSIONS[offset : offset + limit],
         "total": len(_SUBMISSIONS),
         "demo": True,
     }
@@ -250,31 +261,44 @@ async def demo_profile():
 
 
 @router.get("/users/admin/list")
-async def demo_users_list(limit: int = 50, offset: int = 0, city: str = None, state: str = None):
+async def demo_users_list(
+    limit: int = 50, offset: int = 0, city: str = None, state: str = None
+):
     users = [
-        {"user_id": f"u-{i:03d}", "phone": f"+9199990{i:05d}", "city": "Bengaluru",
-         "state": "Karnataka", "preferred_language": "kn", "submissions_count": (i % 5) + 1,
-         "registered_at": (datetime.now(timezone.utc) - timedelta(days=i*2)).isoformat()}
+        {
+            "user_id": f"u-{i:03d}",
+            "phone": f"+9199990{i:05d}",
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "preferred_language": "kn",
+            "submissions_count": (i % 5) + 1,
+            "registered_at": (
+                datetime.now(timezone.utc) - timedelta(days=i * 2)
+            ).isoformat(),
+        }
         for i in range(1, 21)
     ]
-    return {"users": users[offset:offset+limit], "total": 20, "demo": True}
+    return {"users": users[offset : offset + limit], "total": 20, "demo": True}
 
 
 @router.get("/dashboard/export/csv")
 async def demo_export_csv():
     from fastapi.responses import StreamingResponse
     import io
+
     rows = ["rank,category,ward,complaint_count,priority_score,suggested_project"]
     for h in _HOTSPOTS:
         rows.append(
             f"{h['priority_rank']},{h['category']},{h['ward_id']},"
-            f"{h['complaint_count']},{h['priority_score']},\"{h['suggested_project']}\""
+            f'{h["complaint_count"]},{h["priority_score"]},"{h["suggested_project"]}"'
         )
     content = "\n".join(rows)
     return StreamingResponse(
         io.BytesIO(content.encode()),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=janmat_priorities_demo.csv"},
+        headers={
+            "Content-Disposition": "attachment; filename=janmat_priorities_demo.csv"
+        },
     )
 
 
@@ -291,6 +315,7 @@ async def demo_score(body: dict = None):
 @router.post("/auth/verify")
 async def demo_auth():
     import jwt as pyjwt
+
     token = pyjwt.encode(
         {"sub": "demo-user", "phone": "+91-9999999999", "demo": True},
         "demo-secret",
@@ -303,12 +328,22 @@ async def demo_auth():
 async def demo_dashboard_login():
     """OAuth2 password flow stub — used by Node.js dashboard in demo mode."""
     import jwt as pyjwt
+
     token = pyjwt.encode(
-        {"sub": "mp@janmat.demo", "role": "mp", "constituency_id": "KA-BLR-NORTH-01", "demo": True},
+        {
+            "sub": "mp@janmat.demo",
+            "role": "mp",
+            "constituency_id": "KA-BLR-NORTH-01",
+            "demo": True,
+        },
         "demo-secret",
         algorithm="HS256",
     )
-    return {"access_token": token, "token_type": "bearer", "constituency_id": "KA-BLR-NORTH-01"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "constituency_id": "KA-BLR-NORTH-01",
+    }
 
 
 @router.get("/dashboard/heatmap")
@@ -323,11 +358,11 @@ async def demo_trends(days: int = 30):
     return {
         "days": days,
         "series": [
-            {"category": "Roads",      "submissions": [4, 3, 5, 6, 4, 3, 7, 5, 6, 4]},
-            {"category": "Water",      "submissions": [2, 3, 4, 3, 2, 5, 3, 4, 3, 2]},
+            {"category": "Roads", "submissions": [4, 3, 5, 6, 4, 3, 7, 5, 6, 4]},
+            {"category": "Water", "submissions": [2, 3, 4, 3, 2, 5, 3, 4, 3, 2]},
             {"category": "Sanitation", "submissions": [1, 2, 2, 3, 1, 2, 2, 3, 2, 1]},
-            {"category": "Education",  "submissions": [1, 1, 2, 1, 2, 1, 1, 2, 1, 1]},
-            {"category": "Health",     "submissions": [1, 2, 1, 2, 1, 1, 2, 1, 2, 1]},
+            {"category": "Education", "submissions": [1, 1, 2, 1, 2, 1, 1, 2, 1, 1]},
+            {"category": "Health", "submissions": [1, 2, 1, 2, 1, 1, 2, 1, 2, 1]},
         ],
         "demo": True,
     }
@@ -344,7 +379,13 @@ async def demo_stats(constituency_id: str):
         "hotspots_identified": 5,
         "avg_urgency": 3.7,
         "top_category": "Roads",
-        "category_breakdown": {"Roads": 38, "Water": 31, "Sanitation": 23, "Education": 18, "Health": 24},
+        "category_breakdown": {
+            "Roads": 38,
+            "Water": 31,
+            "Sanitation": 23,
+            "Education": 18,
+            "Health": 24,
+        },
         "submission_trend_7d": [12, 15, 11, 18, 14, 9, 16],
         "demo": True,
     }

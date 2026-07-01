@@ -4,6 +4,7 @@ Cloud Speech-to-Text service — Indic language audio transcription.
 Supports: Hindi (hi-IN), Kannada (kn-IN), Tamil (ta-IN), Telugu (te-IN),
           Bengali (bn-IN), Marathi (mr-IN), Gujarati (gu-IN), English (en-IN)
 """
+
 import structlog
 from google.cloud import speech_v1 as speech
 from tenacity import retry, stop_after_attempt, wait_exponential

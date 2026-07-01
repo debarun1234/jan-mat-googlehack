@@ -6,8 +6,8 @@ Three-phase pipeline:
   Phase 2 (analytics)  — BigQuery clustering + priority scoring
   Phase 3 (dashboard)  — MP executive dashboard API
 """
+
 import structlog
-import logging
 import sys
 from contextlib import asynccontextmanager
 
@@ -35,6 +35,7 @@ log = structlog.get_logger()
 
 # ── Lifespan ──────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -50,6 +51,7 @@ async def lifespan(app: FastAPI):
 
 
 # ── App factory ───────────────────────────────────────────────────────
+
 
 def create_app() -> FastAPI:
     settings = get_settings()

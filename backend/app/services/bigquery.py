@@ -7,9 +7,8 @@ Tables:
   janmat_analytics.priority_scores      — Phase 2 ranked output
   janmat_infrastructure.public_infrastructure  — Census / NFHS reference data
 """
-import uuid
+
 from datetime import datetime, timezone
-from typing import Any
 
 import structlog
 from google.cloud import bigquery
@@ -39,7 +38,9 @@ class BigQueryService:
 
     # ── Phase 1: Stream grievance into BigQuery ──────────────────────
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8), reraise=True)
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8), reraise=True
+    )
     async def insert_grievance(
         self,
         submission_id: str,
@@ -81,7 +82,11 @@ class BigQueryService:
             log.error("bq_insert_error", errors=errors, submission_id=submission_id)
             raise RuntimeError(f"BigQuery insert failed: {errors}")
 
-        log.info("bq_grievance_inserted", submission_id=submission_id, category=row["category"])
+        log.info(
+            "bq_grievance_inserted",
+            submission_id=submission_id,
+            category=row["category"],
+        )
 
     # ── Phase 2: Run clustering + scoring queries ─────────────────────
 
@@ -95,7 +100,9 @@ class BigQueryService:
 
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                bigquery.ScalarQueryParameter(
+                    "constituency_id", "STRING", constituency_id
+                ),
                 bigquery.ScalarQueryParameter("cluster_radius_km", "FLOAT64", 2.0),
                 bigquery.ScalarQueryParameter("min_complaints", "INT64", 10),
             ]
@@ -103,7 +110,11 @@ class BigQueryService:
         job = client.query(sql, job_config=job_config)
         results = job.result()
         rows = [dict(row) for row in results]
-        log.info("bq_clustering_complete", constituency_id=constituency_id, hotspots=len(rows))
+        log.info(
+            "bq_clustering_complete",
+            constituency_id=constituency_id,
+            hotspots=len(rows),
+        )
         return rows
 
     async def run_priority_scoring(self, constituency_id: str) -> list[dict]:
@@ -116,13 +127,19 @@ class BigQueryService:
 
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                bigquery.ScalarQueryParameter(
+                    "constituency_id", "STRING", constituency_id
+                ),
             ]
         )
         job = client.query(sql, job_config=job_config)
         results = job.result()
         rows = [dict(row) for row in results]
-        log.info("bq_priority_scoring_complete", constituency_id=constituency_id, ranked=len(rows))
+        log.info(
+            "bq_priority_scoring_complete",
+            constituency_id=constituency_id,
+            ranked=len(rows),
+        )
         return rows
 
     async def get_infrastructure_facts(
@@ -154,7 +171,9 @@ class BigQueryService:
             sql,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                    bigquery.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
                     bigquery.ScalarQueryParameter("category", "STRING", category),
                 ]
             ),
@@ -162,11 +181,18 @@ class BigQueryService:
         rows = [dict(r) for r in job.result()]
         # Format as readable string for Gemini prompt
         if not rows:
-            return {"summary": f"No baseline data available for {category} in {constituency_id}"}
-        lines = [f"- {r['metric_name']}: {r['metric_value']} {r['metric_unit']} (Source: {r['data_source']}, {r['reference_year']})" for r in rows]
+            return {
+                "summary": f"No baseline data available for {category} in {constituency_id}"
+            }
+        lines = [
+            f"- {r['metric_name']}: {r['metric_value']} {r['metric_unit']} (Source: {r['data_source']}, {r['reference_year']})"
+            for r in rows
+        ]
         return {"summary": "\n".join(lines), "rows": rows}
 
-    async def get_priority_ranking(self, constituency_id: str, limit: int = 10) -> list[dict]:
+    async def get_priority_ranking(
+        self, constituency_id: str, limit: int = 10
+    ) -> list[dict]:
         """
         Fetch the latest ranked project list for the MP dashboard.
         """
@@ -203,7 +229,9 @@ class BigQueryService:
             sql,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                    bigquery.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
                     bigquery.ScalarQueryParameter("limit", "INT64", limit),
                 ]
             ),
@@ -233,7 +261,9 @@ class BigQueryService:
             sql,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                    bigquery.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
                 ]
             ),
         )
@@ -264,6 +294,7 @@ class BigQueryService:
     def _load_query(self, filename: str) -> str:
         """Load a SQL query from bigquery/queries/."""
         import pathlib
+
         # /app/app/services/bigquery.py → 3x parent → /app → bigquery/queries
         # (build context = project root; COPY bigquery/queries/ ./bigquery/queries/)
         query_dir = pathlib.Path(__file__).parent.parent.parent / "bigquery" / "queries"
@@ -277,11 +308,10 @@ class BigQueryService:
     def _inline_query(self, filename: str) -> str:
         """Fallback inline queries if file not found."""
         from app.config import get_settings
+
         s = get_settings()
         p = s.gcp_project_id
         ds = s.bq_analytics_dataset
-        ids = s.bq_infrastructure_dataset
-
         if filename == "demand_clustering.sql":
             return f"""
             SELECT
