@@ -1,5 +1,9 @@
-name: DB Controls Start / Stop
+name: DB Controls - Start / Stop
+
 on:
+  schedule:
+    # 07:30 UTC = 1:00 PM IST — auto-start for the day
+    - cron: "30 7 * * *"
   workflow_dispatch:
     inputs:
       action:
@@ -11,25 +15,84 @@ on:
         description: "Reason"
         required: false
         default: "Manual"
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  DB_INSTANCE: janmat-db-poc
+  CLOUD_RUN_SERVICE: janmat-backend
+  REGION: asia-south1
+
 jobs:
   db-control:
-    name: Cloud SQL ${{ inputs.action }}
+    name: Cloud SQL ${{ inputs.action || 'start (scheduled)' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+
     steps:
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SA }}
+
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Start
-        if: inputs.action == 'start'
-        run: gcloud sql instances patch janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --activation-policy=ALWAYS --quiet
-      - name: Stop
-        if: inputs.action == 'stop'
-        run: gcloud sql instances patch janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --activation-policy=NEVER --quiet
-      - run: |
+
+      # ── Scheduled morning startup ──────────────────────────────────────
+      - name: Morning startup (scheduled)
+        if: github.event_name == 'schedule'
+        run: |
+          echo "=== Startup (1:00 PM IST) ==="
+
+          # Start Cloud SQL
+          STATE=$(gcloud sql instances describe $DB_INSTANCE \
+            --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
+          if [ "$STATE" != "RUNNABLE" ]; then
+            echo "Starting Cloud SQL..."
+            gcloud sql instances patch $DB_INSTANCE \
+              --project=$PROJECT_ID \
+              --activation-policy=ALWAYS \
+              --quiet
+            echo "✅ Cloud SQL starting (takes ~60s to be ready)"
+          else
+            echo "ℹ️  Cloud SQL already running"
+          fi
+
+          # Ensure Cloud Run min-instances back to 0 (auto-scales up on traffic)
+          gcloud run services update $CLOUD_RUN_SERVICE \
+            --project=$PROJECT_ID \
+            --region=$REGION \
+            --min-instances=0 \
+            --quiet 2>/dev/null && echo "✅ Cloud Run ready (scales on traffic)" \
+            || echo "ℹ️  Cloud Run service not yet deployed (skip)"
+
+          sleep 15
+          echo "=== Status ==="
+          gcloud sql instances describe $DB_INSTANCE \
+            --project=$PROJECT_ID --format='value(state)' 2>/dev/null || true
+
+      # ── Manual start ──────────────────────────────────────────────────
+      - name: Manual start
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'start'
+        run: |
+          echo "Starting Cloud SQL (reason: ${{ inputs.reason }})..."
+          gcloud sql instances patch $DB_INSTANCE \
+            --project=$PROJECT_ID \
+            --activation-policy=ALWAYS \
+            --quiet
           sleep 10
-          gcloud sql instances describe janmat-db-poc --project=${{ secrets.GCP_PROJECT_ID }} --format='value(state)'
+          gcloud sql instances describe $DB_INSTANCE \
+            --project=$PROJECT_ID --format='value(state)'
+
+      # ── Manual stop ───────────────────────────────────────────────────
+      - name: Manual stop
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'stop'
+        run: |
+          echo "Stopping Cloud SQL (reason: ${{ inputs.reason }})..."
+          gcloud sql instances patch $DB_INSTANCE \
+            --project=$PROJECT_ID \
+            --activation-policy=NEVER \
+            --quiet
+          sleep 10
+          gcloud sql instances describe $DB_INSTANCE \
+            --project=$PROJECT_ID --format='value(state)'
