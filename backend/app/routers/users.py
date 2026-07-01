@@ -20,9 +20,8 @@ from typing import Annotated
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field, field_validator
-from jose import jwt
 
 from app.config import Settings, get_settings
 from app.services.bigquery import BigQueryService, get_bigquery_service
@@ -139,7 +138,7 @@ async def _get_current_user(
         raise HTTPException(status_code=401, detail="Missing authentication token")
     token = authorization.split(" ", 1)[1]
     try:
-        from jose import jwt as jose_jwt, JWTError
+        from jose import jwt as jose_jwt
         payload = jose_jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         if payload.get("type") != "citizen":
             raise HTTPException(status_code=403, detail="Not a citizen token")

@@ -5,7 +5,6 @@ Used for local Docker testing without GCP credentials.
 import uuid
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["demo"])
 

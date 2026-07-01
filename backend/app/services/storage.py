@@ -4,7 +4,6 @@ Cloud Storage service — media upload for audio and images.
 All citizen-submitted media is stored in GCS, never in the database.
 The GCS URI is what gets stored in BigQuery (citizen_grievances.raw_input_gcs_uri).
 """
-import uuid
 from datetime import datetime
 
 import structlog

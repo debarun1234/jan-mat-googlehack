@@ -7,9 +7,7 @@ Tables:
   janmat_analytics.priority_scores      — Phase 2 ranked output
   janmat_infrastructure.public_infrastructure  — Census / NFHS reference data
 """
-import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 import structlog
 from google.cloud import bigquery
@@ -280,8 +278,6 @@ class BigQueryService:
         s = get_settings()
         p = s.gcp_project_id
         ds = s.bq_analytics_dataset
-        ids = s.bq_infrastructure_dataset
-
         if filename == "demand_clustering.sql":
             return f"""
             SELECT

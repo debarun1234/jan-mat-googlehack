@@ -7,7 +7,6 @@ Three-phase pipeline:
   Phase 3 (dashboard)  — MP executive dashboard API
 """
 import structlog
-import logging
 import sys
 from contextlib import asynccontextmanager
 

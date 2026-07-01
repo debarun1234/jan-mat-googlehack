@@ -8,7 +8,6 @@ Gemini is NEVER used as a chatbot. Every call:
 
 This is the core differentiator of JanMat vs. naive LLM hackathon projects.
 """
-import base64
 import time
 from enum import Enum
 from typing import Optional

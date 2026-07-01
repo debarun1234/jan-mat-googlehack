@@ -8,7 +8,6 @@ Endpoints:
   GET  /intake/status/{submission_id}  — check processing status
 """
 import uuid
-from datetime import datetime, timezone
 from typing import Annotated
 
 import structlog
