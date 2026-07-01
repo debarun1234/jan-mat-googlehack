@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
     log_level: str = "INFO"
 
+    # Demo mode — skips all GCP calls, returns mock data for local testing
+    demo_mode: bool = False
+
 
 _settings: Settings | None = None
 

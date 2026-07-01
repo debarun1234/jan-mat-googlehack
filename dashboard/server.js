@@ -97,15 +97,17 @@ app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body;
   if (!DEMO_MODE) return res.redirect("/login?error=Use+Google+Sign+In");
   if (username === process.env.DEMO_USER && password === process.env.DEMO_PASS) {
+    // Set session immediately — API token is optional enrichment
+    req.session.mp = { name: "Demo MP", email: username, constituency_id: "KA-BLR-NORTH-01", auth_method: "demo" };
     try {
       const params = new URLSearchParams({ username, password, grant_type: "password" });
       const { data } = await axios.post(`${API}/dashboard/auth/login`, params.toString(), {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 3000,
       });
-      req.session.mp = { name: "Demo MP", email: username, constituency_id: data.constituency_id, auth_method: "demo" };
       req.session.apiToken = data.access_token;
-      return res.redirect("/dashboard");
-    } catch (_) {}
+    } catch (_) { /* API token optional in demo mode */ }
+    return res.redirect("/dashboard");
   }
   res.redirect("/login?error=Invalid+credentials");
 });
