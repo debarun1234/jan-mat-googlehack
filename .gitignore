@@ -68,11 +68,13 @@ citizen-app/web/
 *.g.dart
 
 # ── Google credentials / service accounts ───────────────────────────
-*.json
-!citizen-app/android/app/google-services.json.example
+# Block credential files specifically — do NOT use *.json (catches package.json etc.)
 service-account*.json
 gcp-key*.json
 credentials*.json
+*-key.json
+application_default_credentials.json
+!citizen-app/android/app/google-services.json.example
 
 # ── OS ───────────────────────────────────────────────────────────────
 .DS_Store
