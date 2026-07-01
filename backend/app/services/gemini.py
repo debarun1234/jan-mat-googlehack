@@ -8,6 +8,7 @@ Gemini is NEVER used as a chatbot. Every call:
 
 This is the core differentiator of JanMat vs. naive LLM hackathon projects.
 """
+
 import time
 from enum import Enum
 from typing import Optional
@@ -32,6 +33,7 @@ log = structlog.get_logger()
 
 # ── Output schema — Gemini MUST return exactly this ──────────────────
 
+
 class GrievanceCategory(str, Enum):
     EDUCATION = "Education"
     HEALTH = "Health"
@@ -43,32 +45,33 @@ class GrievanceCategory(str, Enum):
 
 class StructuredGrievance(BaseModel):
     """Pydantic model that defines what Gemini must return — nothing more, nothing less."""
+
     category: GrievanceCategory = Field(
         description="Infrastructure category the grievance relates to"
     )
     latitude: float = Field(
-        ge=-90, le=90,
-        description="Latitude of the location mentioned in the grievance"
+        ge=-90, le=90, description="Latitude of the location mentioned in the grievance"
     )
     longitude: float = Field(
-        ge=-180, le=180,
-        description="Longitude of the location mentioned in the grievance"
+        ge=-180,
+        le=180,
+        description="Longitude of the location mentioned in the grievance",
     )
     urgency_rating: int = Field(
-        ge=1, le=5,
-        description="Urgency 1 (low) to 5 (critical). 5 = life-safety risk."
+        ge=1, le=5, description="Urgency 1 (low) to 5 (critical). 5 = life-safety risk."
     )
     summary_en: str = Field(
-        min_length=10, max_length=300,
-        description="Concise English summary of the core issue, 1-2 sentences"
+        min_length=10,
+        max_length=300,
+        description="Concise English summary of the core issue, 1-2 sentences",
     )
     ward_name: Optional[str] = Field(
         default=None,
-        description="Ward or village name extracted from the text, if identifiable"
+        description="Ward or village name extracted from the text, if identifiable",
     )
     source_language: Optional[str] = Field(
         default=None,
-        description="BCP-47 language code of the original submission (e.g. hi, kn, ta)"
+        description="BCP-47 language code of the original submission (e.g. hi, kn, ta)",
     )
 
     @field_validator("latitude")
@@ -147,7 +150,7 @@ class GeminiService:
 
     def _generation_config(self) -> GenerationConfig:
         return GenerationConfig(
-            temperature=0.0,          # Deterministic — no creativity
+            temperature=0.0,  # Deterministic — no creativity
             top_p=1.0,
             max_output_tokens=512,
             response_mime_type="application/json",
@@ -252,15 +255,15 @@ class GeminiService:
 Write 2-3 sentences in formal English. Cite specific numbers. Do NOT use markdown.
 
 Demand data:
-- Category: {hotspot.get('category')}
-- Complaint count: {hotspot.get('complaint_count')} citizen submissions
-- Average urgency: {hotspot.get('avg_urgency', 0):.1f}/5
-- Affected population: {hotspot.get('affected_population', 'unknown')}
-- Demand score: {hotspot.get('demand_score', 0):.2f}
-- Gap index: {hotspot.get('gap_index', 0):.2f}
-- Priority score: {hotspot.get('priority_score', 0):.2f}/10 (rank #{hotspot.get('priority_rank', '?')})
-- Suggested project: {hotspot.get('suggested_project', 'Infrastructure improvement')}
-- Location: {hotspot.get('center_lat', 0):.4f}°N, {hotspot.get('center_lon', 0):.4f}°E, radius {hotspot.get('radius_km', 2)}km
+- Category: {hotspot.get("category")}
+- Complaint count: {hotspot.get("complaint_count")} citizen submissions
+- Average urgency: {hotspot.get("avg_urgency", 0):.1f}/5
+- Affected population: {hotspot.get("affected_population", "unknown")}
+- Demand score: {hotspot.get("demand_score", 0):.2f}
+- Gap index: {hotspot.get("gap_index", 0):.2f}
+- Priority score: {hotspot.get("priority_score", 0):.2f}/10 (rank #{hotspot.get("priority_rank", "?")})
+- Suggested project: {hotspot.get("suggested_project", "Infrastructure improvement")}
+- Location: {hotspot.get("center_lat", 0):.4f}°N, {hotspot.get("center_lon", 0):.4f}°E, radius {hotspot.get("radius_km", 2)}km
 
 Public infrastructure baseline:
 {infra_facts}
@@ -284,7 +287,11 @@ Write the Evidence Log now:"""
             ),
         )
         evidence = response.text.strip()
-        log.info("gemini_evidence_log", rank=hotspot.get('priority_rank'), chars=len(evidence))
+        log.info(
+            "gemini_evidence_log",
+            rank=hotspot.get("priority_rank"),
+            chars=len(evidence),
+        )
         return evidence
 
 

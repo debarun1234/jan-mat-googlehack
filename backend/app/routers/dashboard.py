@@ -8,6 +8,7 @@ Endpoints:
   GET  /dashboard/trends           — category trends over time
   GET  /dashboard/export/csv       — CSV export of ranked recommendations
 """
+
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -38,6 +39,7 @@ DEMO_MP = {
 
 # ── Auth ──────────────────────────────────────────────────────────────
 
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -57,7 +59,9 @@ async def _get_current_mp(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+        )
         username = payload.get("sub")
         if not username:
             raise ValueError("No sub claim")
@@ -103,6 +107,7 @@ async def login(
 
 
 # ── Projects ─────────────────────────────────────────────────────────
+
 
 class ProjectItem(BaseModel):
     rank: int
@@ -170,7 +175,9 @@ async def get_projects(
                     infra_facts=infra.get("summary", ""),
                 )
             except Exception as e:
-                log.warning("evidence_log_failed", rank=row.get("priority_rank"), error=str(e))
+                log.warning(
+                    "evidence_log_failed", rank=row.get("priority_rank"), error=str(e)
+                )
                 evidence_text = f"Evidence generation unavailable: {str(e)}"
 
         projects.append(
@@ -201,6 +208,7 @@ async def get_projects(
 
 # ── Heatmap ───────────────────────────────────────────────────────────
 
+
 @router.get("/heatmap")
 async def get_heatmap(
     mp: Annotated[dict, Depends(_get_current_mp)],
@@ -224,6 +232,7 @@ async def get_heatmap(
 
 # ── Trends ────────────────────────────────────────────────────────────
 
+
 @router.get("/trends")
 async def get_trends(
     mp: Annotated[dict, Depends(_get_current_mp)],
@@ -236,6 +245,7 @@ async def get_trends(
     client = bq._get_client()
 
     from google.cloud import bigquery as gcbq
+
     sql = f"""
     SELECT
         DATE(submitted_at) AS date,
@@ -254,7 +264,9 @@ async def get_trends(
             sql,
             job_config=gcbq.QueryJobConfig(
                 query_parameters=[
-                    gcbq.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                    gcbq.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
                     gcbq.ScalarQueryParameter("days", "INT64", days),
                 ]
             ),
@@ -270,6 +282,7 @@ async def get_trends(
 
 
 # ── CSV Export ────────────────────────────────────────────────────────
+
 
 @router.get("/export/csv")
 async def export_csv(
@@ -287,29 +300,41 @@ async def export_csv(
 
     import csv
     import io
+
     output = io.StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "Rank", "Category", "Suggested Project",
-        "Priority Score", "Demand Score", "Gap Index",
-        "Complaint Count", "Avg Urgency",
-        "Latitude", "Longitude", "Radius (km)",
-    ])
+    writer.writerow(
+        [
+            "Rank",
+            "Category",
+            "Suggested Project",
+            "Priority Score",
+            "Demand Score",
+            "Gap Index",
+            "Complaint Count",
+            "Avg Urgency",
+            "Latitude",
+            "Longitude",
+            "Radius (km)",
+        ]
+    )
     for row in ranked:
-        writer.writerow([
-            row.get("priority_rank"),
-            row.get("category"),
-            row.get("suggested_project"),
-            round(float(row.get("priority_score", 0)), 3),
-            round(float(row.get("demand_score", 0)), 3),
-            round(float(row.get("gap_index", 0)), 3),
-            row.get("complaint_count"),
-            round(float(row.get("avg_urgency", 0)), 2),
-            row.get("center_lat"),
-            row.get("center_lon"),
-            row.get("radius_km"),
-        ])
+        writer.writerow(
+            [
+                row.get("priority_rank"),
+                row.get("category"),
+                row.get("suggested_project"),
+                round(float(row.get("priority_score", 0)), 3),
+                round(float(row.get("demand_score", 0)), 3),
+                round(float(row.get("gap_index", 0)), 3),
+                row.get("complaint_count"),
+                round(float(row.get("avg_urgency", 0)), 2),
+                row.get("center_lat"),
+                row.get("center_lon"),
+                row.get("radius_km"),
+            ]
+        )
 
     output.seek(0)
     filename = f"janmat_priority_{constituency_id}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"

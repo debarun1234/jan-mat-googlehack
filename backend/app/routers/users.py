@@ -14,6 +14,7 @@ Endpoints:
   GET  /users/submissions       — own submission history
   GET  /users/heatmap/{pin}     — constituency heatmap data for citizen view
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -44,6 +45,7 @@ _pincode_map: dict[str, str] = {
 
 
 # ── Models ─────────────────────────────────────────────────────────────
+
 
 class FirebaseAuthRequest(BaseModel):
     firebase_uid: str
@@ -90,6 +92,7 @@ class AuthResponse(BaseModel):
 
 # ── Firebase token verification ────────────────────────────────────────
 
+
 async def _verify_firebase_token(id_token: str, settings: Settings) -> str | None:
     """
     Verify Firebase ID token via Google Identity Toolkit REST API.
@@ -102,7 +105,9 @@ async def _verify_firebase_token(id_token: str, settings: Settings) -> str | Non
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://identitytoolkit.googleapis.com/v1/accounts:lookup",
-                params={"key": settings.gcp_project_id},  # Using project ID as placeholder
+                params={
+                    "key": settings.gcp_project_id
+                },  # Using project ID as placeholder
                 json={"idToken": id_token},
                 timeout=10,
             )
@@ -116,9 +121,12 @@ async def _verify_firebase_token(id_token: str, settings: Settings) -> str | Non
     return None
 
 
-def _make_user_jwt(user_id: str, firebase_uid: str, constituency_id: str, settings: Settings) -> str:
+def _make_user_jwt(
+    user_id: str, firebase_uid: str, constituency_id: str, settings: Settings
+) -> str:
     from datetime import timedelta
     from jose import jwt as jose_jwt
+
     payload = {
         "sub": user_id,
         "firebase_uid": firebase_uid,
@@ -127,7 +135,9 @@ def _make_user_jwt(user_id: str, firebase_uid: str, constituency_id: str, settin
         "exp": datetime.now(timezone.utc) + timedelta(days=30),
         "iat": datetime.now(timezone.utc),
     }
-    return jose_jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return jose_jwt.encode(
+        payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
+    )
 
 
 async def _get_current_user(
@@ -139,7 +149,10 @@ async def _get_current_user(
     token = authorization.split(" ", 1)[1]
     try:
         from jose import jwt as jose_jwt
-        payload = jose_jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+
+        payload = jose_jwt.decode(
+            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+        )
         if payload.get("type") != "citizen":
             raise HTTPException(status_code=403, detail="Not a citizen token")
         return payload
@@ -148,6 +161,7 @@ async def _get_current_user(
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────
+
 
 @router.post("/auth", response_model=AuthResponse)
 async def firebase_auth(
@@ -183,9 +197,15 @@ async def firebase_auth(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "profile_complete": False,
         }
-        log.info("user_created", firebase_uid=firebase_uid, phone=request.phone_number[:6] + "****")
+        log.info(
+            "user_created",
+            firebase_uid=firebase_uid,
+            phone=request.phone_number[:6] + "****",
+        )
     else:
-        _user_store[firebase_uid]["last_login_at"] = datetime.now(timezone.utc).isoformat()
+        _user_store[firebase_uid]["last_login_at"] = datetime.now(
+            timezone.utc
+        ).isoformat()
 
     user = _user_store[firebase_uid]
     token = _make_user_jwt(
@@ -199,7 +219,9 @@ async def firebase_auth(
         access_token=token,
         user_id=user["user_id"],
         profile_complete=user.get("profile_complete", False),
-        message="Welcome back" if user.get("profile_complete") else "Please complete your profile",
+        message="Welcome back"
+        if user.get("profile_complete")
+        else "Please complete your profile",
     )
 
 
@@ -216,17 +238,24 @@ async def update_profile(
 
     constituency_id = _pincode_map.get(request.pin_code, settings.constituency_id)
 
-    _user_store[firebase_uid].update({
-        "full_name": request.full_name,
-        "town": request.town,
-        "city": request.city,
-        "state": request.state,
-        "pin_code": request.pin_code,
-        "constituency_id": constituency_id,
-        "profile_complete": True,
-    })
+    _user_store[firebase_uid].update(
+        {
+            "full_name": request.full_name,
+            "town": request.town,
+            "city": request.city,
+            "state": request.state,
+            "pin_code": request.pin_code,
+            "constituency_id": constituency_id,
+            "profile_complete": True,
+        }
+    )
 
-    log.info("user_profile_updated", firebase_uid=firebase_uid, city=request.city, constituency=constituency_id)
+    log.info(
+        "user_profile_updated",
+        firebase_uid=firebase_uid,
+        city=request.city,
+        constituency=constituency_id,
+    )
     user = _user_store[firebase_uid]
     return UserResponse(**user)
 
@@ -278,6 +307,7 @@ async def get_citizen_heatmap(
 
 # ── Admin: list all users (MP only, accessed via dashboard) ──────────
 
+
 @router.get("/admin/list")
 async def list_users(
     constituency_id: str | None = None,
@@ -297,24 +327,26 @@ async def list_users(
         users = [u for u in users if (u.get("state") or "").lower() == state.lower()]
 
     total = len(users)
-    page = users[offset:offset + limit]
+    page = users[offset : offset + limit]
 
     # Strip sensitive fields for MP view
     safe = []
     for u in page:
-        safe.append({
-            "user_id": u["user_id"],
-            "full_name": u.get("full_name", "Anonymous"),
-            "town": u.get("town"),
-            "city": u.get("city"),
-            "state": u.get("state"),
-            "pin_code": u.get("pin_code"),
-            "constituency_id": u.get("constituency_id"),
-            "submission_count": u.get("submission_count", 0),
-            "profile_complete": u.get("profile_complete", False),
-            "joined": u.get("created_at", ""),
-            # Phone intentionally omitted unless MP has explicit access
-        })
+        safe.append(
+            {
+                "user_id": u["user_id"],
+                "full_name": u.get("full_name", "Anonymous"),
+                "town": u.get("town"),
+                "city": u.get("city"),
+                "state": u.get("state"),
+                "pin_code": u.get("pin_code"),
+                "constituency_id": u.get("constituency_id"),
+                "submission_count": u.get("submission_count", 0),
+                "profile_complete": u.get("profile_complete", False),
+                "joined": u.get("created_at", ""),
+                # Phone intentionally omitted unless MP has explicit access
+            }
+        )
 
     return {
         "total": total,
@@ -325,7 +357,7 @@ async def list_users(
             "by_city": _count_by(users, "city"),
             "by_state": _count_by(users, "state"),
             "profile_complete": sum(1 for u in users if u.get("profile_complete")),
-        }
+        },
     }
 
 

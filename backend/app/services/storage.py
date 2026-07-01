@@ -4,6 +4,7 @@ Cloud Storage service — media upload for audio and images.
 All citizen-submitted media is stored in GCS, never in the database.
 The GCS URI is what gets stored in BigQuery (citizen_grievances.raw_input_gcs_uri).
 """
+
 from datetime import datetime
 
 import structlog
@@ -57,7 +58,9 @@ class StorageService:
     ) -> str:
         """Upload audio bytes. Returns GCS URI (gs://bucket/path)."""
         ext = content_type.split("/")[-1].replace("mpeg", "mp3")
-        object_path = self._make_object_path("audio", constituency_id, submission_id, ext)
+        object_path = self._make_object_path(
+            "audio", constituency_id, submission_id, ext
+        )
         return await self._upload(audio_bytes, object_path, content_type)
 
     @retry(
@@ -74,7 +77,9 @@ class StorageService:
     ) -> str:
         """Upload image bytes. Returns GCS URI (gs://bucket/path)."""
         ext = content_type.split("/")[-1]
-        object_path = self._make_object_path("images", constituency_id, submission_id, ext)
+        object_path = self._make_object_path(
+            "images", constituency_id, submission_id, ext
+        )
         return await self._upload(image_bytes, object_path, content_type)
 
     async def _upload(
@@ -99,6 +104,7 @@ class StorageService:
         bucket = client.bucket(self._bucket_name)
         blob = bucket.blob(object_path)
         from datetime import timedelta
+
         url = blob.generate_signed_url(
             expiration=timedelta(seconds=expiration_seconds),
             method="GET",

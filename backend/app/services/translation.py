@@ -4,6 +4,7 @@ Cloud Translation API service — normalize Indic language text to English.
 Used between Speech-to-Text output and Gemini extraction so that Gemini
 always receives English text (reduces token cost and improves accuracy).
 """
+
 import structlog
 from google.cloud import translate_v2 as translate
 from tenacity import retry, stop_after_attempt, wait_exponential

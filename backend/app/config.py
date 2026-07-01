@@ -2,11 +2,14 @@
 Central configuration — reads from environment variables injected by Cloud Run.
 All secrets come from Secret Manager (mounted as env vars via Terraform cloudrun.tf).
 """
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     # GCP
     gcp_project_id: str

@@ -6,6 +6,7 @@ Topics:
   processing-complete   → triggers Evidence Log generation
   priority-updated      → triggers MP dashboard refresh
 """
+
 import json
 import structlog
 from google.cloud import pubsub_v1

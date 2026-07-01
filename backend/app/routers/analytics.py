@@ -12,6 +12,7 @@ Endpoints:
   POST /analytics/pubsub/callback  — Pub/Sub push subscription handler
   GET  /analytics/stats            — submission stats for a constituency
 """
+
 import base64
 import json
 from datetime import datetime, timezone
@@ -31,6 +32,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 # ── Clustering ────────────────────────────────────────────────────────
+
 
 class ClusterRequest(BaseModel):
     constituency_id: str | None = None
@@ -69,6 +71,7 @@ async def run_clustering(
 
 
 # ── Priority Scoring ──────────────────────────────────────────────────
+
 
 class ScoringResponse(BaseModel):
     constituency_id: str
@@ -111,6 +114,7 @@ async def run_scoring(
 
 
 # ── Evidence Log Generation ───────────────────────────────────────────
+
 
 class EvidenceResponse(BaseModel):
     constituency_id: str
@@ -165,11 +169,16 @@ async def generate_evidence(
             run_at=datetime.now(timezone.utc).isoformat(),
         )
     except Exception as exc:
-        log.error("evidence_generation_failed", constituency_id=constituency_id, error=str(exc))
+        log.error(
+            "evidence_generation_failed",
+            constituency_id=constituency_id,
+            error=str(exc),
+        )
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ── Pub/Sub Push Handler ──────────────────────────────────────────────
+
 
 @router.post("/pubsub/callback", status_code=status.HTTP_204_NO_CONTENT)
 async def pubsub_push_handler(
@@ -197,7 +206,11 @@ async def pubsub_push_handler(
     constituency_id = payload.get("constituency_id", settings.constituency_id)
     submission_id = payload.get("submission_id")
 
-    log.info("pubsub_callback_received", submission_id=submission_id, constituency_id=constituency_id)
+    log.info(
+        "pubsub_callback_received",
+        submission_id=submission_id,
+        constituency_id=constituency_id,
+    )
 
     # Fire-and-forget: run clustering + scoring in background
     async def _run_pipeline():
@@ -217,6 +230,7 @@ async def pubsub_push_handler(
 
 # ── Stats ─────────────────────────────────────────────────────────────
 
+
 @router.get("/stats/{constituency_id}")
 async def get_stats(
     constituency_id: str,
@@ -228,7 +242,9 @@ async def get_stats(
         category_counts: dict[str, int] = {}
         for row in heatmap:
             cat = row.get("category", "Other")
-            category_counts[cat] = category_counts.get(cat, 0) + int(row.get("weight", 0))
+            category_counts[cat] = category_counts.get(cat, 0) + int(
+                row.get("weight", 0)
+            )
 
         return {
             "constituency_id": constituency_id,

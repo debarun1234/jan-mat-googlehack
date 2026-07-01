@@ -7,11 +7,21 @@ Endpoints:
   POST /intake/image   — photo upload
   GET  /intake/status/{submission_id}  — check processing status
 """
+
 import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
@@ -28,6 +38,7 @@ router = APIRouter(prefix="/intake", tags=["intake"])
 
 # ── Request / Response models ─────────────────────────────────────────
 
+
 class SubmissionResponse(BaseModel):
     submission_id: str
     status: str = "processing"
@@ -39,36 +50,48 @@ class SubmissionResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
+
 def _new_submission_id() -> str:
     return f"sub-{uuid.uuid4().hex[:12]}"
 
 
 ALLOWED_AUDIO_TYPES = {
-    "audio/webm", "audio/ogg", "audio/mpeg", "audio/wav",
-    "audio/mp4", "audio/aac", "audio/flac",
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/mp4",
+    "audio/aac",
+    "audio/flac",
 }
 ALLOWED_IMAGE_TYPES = {
-    "image/jpeg", "image/png", "image/webp", "image/heic",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
 }
-MAX_AUDIO_BYTES = 10 * 1024 * 1024   # 10MB
-MAX_IMAGE_BYTES = 5 * 1024 * 1024    # 5MB
-MAX_TEXT_CHARS  = 2000
+MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10MB
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5MB
+MAX_TEXT_CHARS = 2000
 
 
 # ── Text Submission ───────────────────────────────────────────────────
+
 
 class TextSubmissionRequest(BaseModel):
     text: str = Field(min_length=5, max_length=MAX_TEXT_CHARS)
     language_code: str | None = Field(
         default=None,
-        description="BCP-47 language code (e.g. hi-IN, kn-IN). Auto-detected if omitted."
+        description="BCP-47 language code (e.g. hi-IN, kn-IN). Auto-detected if omitted.",
     )
     constituency_id: str | None = None
     latitude: float | None = None
     longitude: float | None = None
 
 
-@router.post("/text", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/text", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def submit_text(
     request: TextSubmissionRequest,
     background_tasks: BackgroundTasks,
@@ -81,7 +104,9 @@ async def submit_text(
     submission_id = _new_submission_id()
     constituency_id = request.constituency_id or settings.constituency_id
 
-    log.info("intake_text_received", submission_id=submission_id, chars=len(request.text))
+    log.info(
+        "intake_text_received", submission_id=submission_id, chars=len(request.text)
+    )
 
     try:
         # Translate to English if needed
@@ -141,7 +166,10 @@ async def submit_text(
 
 # ── Audio Submission ──────────────────────────────────────────────────
 
-@router.post("/audio", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED)
+
+@router.post(
+    "/audio", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def submit_audio(
     background_tasks: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -174,7 +202,9 @@ async def submit_audio(
             detail=f"Audio exceeds {MAX_AUDIO_BYTES // 1024 // 1024}MB limit",
         )
 
-    log.info("intake_audio_received", submission_id=submission_id, bytes=len(audio_bytes))
+    log.info(
+        "intake_audio_received", submission_id=submission_id, bytes=len(audio_bytes)
+    )
 
     try:
         # Upload raw audio to GCS
@@ -198,7 +228,9 @@ async def submit_audio(
             )
 
         # Translate to English
-        translated, _ = await translation.translate_to_english(transcript, source_language=detected_lang)
+        translated, _ = await translation.translate_to_english(
+            transcript, source_language=detected_lang
+        )
 
         # Gemini extraction
         grievance, latency_ms = await gemini.extract_from_text(
@@ -251,7 +283,10 @@ async def submit_audio(
 
 # ── Image Submission ──────────────────────────────────────────────────
 
-@router.post("/image", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED)
+
+@router.post(
+    "/image", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def submit_image(
     background_tasks: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -281,7 +316,9 @@ async def submit_image(
             detail=f"Image exceeds {MAX_IMAGE_BYTES // 1024 // 1024}MB limit",
         )
 
-    log.info("intake_image_received", submission_id=submission_id, bytes=len(image_bytes))
+    log.info(
+        "intake_image_received", submission_id=submission_id, bytes=len(image_bytes)
+    )
 
     try:
         # Upload to GCS
