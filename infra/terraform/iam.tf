@@ -92,6 +92,22 @@ resource "google_project_iam_member" "pubsub_invoker" {
   member  = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
 }
 
+# ─────────────────────────────────────────
+# IAM Bindings — Cloud Build (Compute Engine default SA)
+# Cloud Build uses {PROJECT_NUMBER}-compute@developer.gserviceaccount.com
+# by default. Grant it push access to Artifact Registry and Cloud Logging.
+# ─────────────────────────────────────────
+resource "google_project_iam_member" "cloudbuild_compute_roles" {
+  for_each = toset([
+    "roles/artifactregistry.writer", # Push images to gcr.io / Artifact Registry
+    "roles/logging.logWriter",       # Write Cloud Build logs
+    "roles/storage.admin",           # Read/write _cloudbuild GCS bucket
+  ])
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
 # Allow Cloud SQL to write to Secret Manager (for connection string)
 resource "google_secret_manager_secret_iam_member" "backend_db_url" {
   secret_id = google_secret_manager_secret.db_url.secret_id
