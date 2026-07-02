@@ -14,8 +14,8 @@ google-cloud-bigquery==3.13.0
 google-cloud-pubsub==2.18.4
 google-cloud-logging==3.8.0
 google-cloud-vision==3.4.4
-google-cloud-speech==2.21.3
-google-cloud-translate==3.14.1
+google-cloud-speech
+google-cloud-translate
 google-generativeai==0.3.0
 
 # API and serialization
@@ -23,7 +23,7 @@ httpx==0.25.2
 requests==2.31.0
 
 # Data processing
-PyPDF2==4.0.1
+PyPDF2
 pdfplumber==0.10.3
 pillow==10.1.0
 python-magic==0.4.27
