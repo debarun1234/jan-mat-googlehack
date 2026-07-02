@@ -1,0 +1,108 @@
+project/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   │
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── upload.py
+│   │   │   └── health.py
+│   │   └── schemas.py
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── storage_service.py
+│   │   ├── extract_service.py
+│   │   ├── transform_service.py
+│   │   ├── ai_inference_service.py
+│   │   └── queue_service.py
+│   │
+│   ├── etl/
+│   │   ├── __init__.py
+│   │   ├── extract/
+│   │   │   ├── __init__.py
+│   │   │   ├── image_extractor.py
+│   │   │   ├── audio_extractor.py
+│   │   │   ├── pdf_extractor.py
+│   │   │   └── text_extractor.py
+│   │   ├── transform/
+│   │   │   ├── __init__.py
+│   │   │   ├── text_cleaner.py
+│   │   │   └── normalizer.py
+│   │   ├── load/
+│   │   │   ├── __init__.py
+│   │   │   └── bigquery_loader.py
+│   │   └── pipeline.py
+│   │
+│   ├── validators/
+│   │   ├── __init__.py
+│   │   ├── input_validator.py
+│   │   ├── ai_validator.py
+│   │   └── data_quality.py
+│   │
+│   ├── ai_engine/
+│   │   ├── __init__.py
+│   │   └── gemini_client.py
+│   │
+│   ├── storage/
+│   │   ├── __init__.py
+│   │   └── gcs_client.py
+│   │
+│   ├── database/
+│   │   ├── __init__.py
+│   │   └── bigquery_client.py
+│   │
+│   ├── queue/
+│   │   ├── __init__.py
+│   │   ├── pubsub_client.py
+│   │   └── worker.py
+│   │
+│   ├── monitoring/
+│   │   ├── __init__.py
+│   │   ├── metrics.py
+│   │   └── logger.py
+│   │
+│   ├── audit/
+│   │   ├── __init__.py
+│   │   └── audit_logger.py
+│   │
+│   ├── config/
+│   │   ├── __init__.py
+│   │   ├── settings.py
+│   │   └── constants.py
+│   │
+│   └── utils/
+│       ├── __init__.py
+│       ├── errors.py
+│       ├── decorators.py
+│       └── helpers.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── test_validators.py
+│   │   ├── test_extractors.py
+│   │   ├── test_transformers.py
+│   │   ├── test_ai_validator.py
+│   │   └── test_bigquery_loader.py
+│   └── integration/
+│       ├── __init__.py
+│       ├── test_pipeline.py
+│       └── test_storage.py
+│
+├── .github/
+│   └── workflows/
+│       └── ci_cd.yml
+│
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── .env.example
+├── .gitignore
+├── README.md
+└── main.py (root entry point)
