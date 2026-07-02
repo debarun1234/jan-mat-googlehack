@@ -55,7 +55,7 @@ pytz==2023.3
 click==8.1.7
 
 # API documentation
-swagger-ui-py==24.4.0
+swagger-ui-py
 
 # Database
 SQLAlchemy==2.0.23
