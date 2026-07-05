@@ -1,0 +1,16 @@
+// ── MAPS API KEY PATCH ─────────────────────────────────────────────
+// In your android/app/build.gradle, inside the android { defaultConfig { block, add:
+//
+//   def localProperties = new Properties()
+//   def localPropertiesFile = rootProject.file('local.properties')
+//   if (localPropertiesFile.exists()) {
+//       localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
+//   }
+//
+//   defaultConfig {
+//       ...
+//       manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
+//   }
+//
+// OR — simpler approach — hardcode the key directly in AndroidManifest.xml:
+//   <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSy..."/>
