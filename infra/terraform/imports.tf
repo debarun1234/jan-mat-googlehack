@@ -53,6 +53,42 @@ import {
   id = "projects/${var.project_id}/global/firewalls/janmat-deny-ingress"
 }
 
+# ── Cloud Run services ───────────────────────────────────────────────────────
+
+import {
+  to = google_cloud_run_v2_service.backend
+  id = "projects/${var.project_id}/locations/asia-south1/services/janmat-backend"
+}
+
+# ── Cloud SQL ────────────────────────────────────────────────────────────────
+
+import {
+  to = google_sql_database_instance.janmat_db
+  id = "projects/${var.project_id}/instances/janmat-db-poc"
+}
+
+import {
+  to = google_sql_database.janmat
+  id = "projects/${var.project_id}/instances/janmat-db-poc/databases/janmat"
+}
+
+import {
+  to = google_sql_user.janmat_user
+  id = "projects/${var.project_id}/instances/janmat-db-poc/users/janmat_user"
+}
+
+# ── Cloud Scheduler ──────────────────────────────────────────────────────────
+
+import {
+  to = google_cloud_scheduler_job.stop_db
+  id = "projects/${var.project_id}/locations/asia-south1/jobs/janmat-stop-db"
+}
+
+import {
+  to = google_cloud_scheduler_job.start_db
+  id = "projects/${var.project_id}/locations/asia-south1/jobs/janmat-start-db"
+}
+
 # ── Pub/Sub subscriptions ────────────────────────────────────────────────────
 
 import {

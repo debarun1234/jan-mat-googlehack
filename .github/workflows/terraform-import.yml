@@ -97,6 +97,20 @@ jobs:
           try_import google_service_account.scheduler "projects/$P/serviceAccounts/janmat-scheduler@$P.iam.gserviceaccount.com"
           try_import google_service_account.github_ci "projects/$P/serviceAccounts/janmat-github-ci@$P.iam.gserviceaccount.com"
 
+          echo "── Cloud Run Services ──"
+          try_import google_cloud_run_v2_service.backend   "projects/$P/locations/asia-south1/services/janmat-backend"
+          try_import google_cloud_run_v2_service.dashboard "projects/$P/locations/asia-south1/services/janmat-dashboard"
+          try_import google_cloud_run_v2_service.etl       "projects/$P/locations/asia-south1/services/janmat-etl"
+
+          echo "── Cloud SQL ──"
+          try_import google_sql_database_instance.janmat_db "projects/$P/instances/janmat-db-poc"
+          try_import google_sql_database.janmat             "projects/$P/instances/janmat-db-poc/databases/janmat"
+          try_import google_sql_user.janmat_user            "projects/$P/instances/janmat-db-poc/users/janmat_user"
+
+          echo "── Cloud Scheduler ──"
+          try_import google_cloud_scheduler_job.stop_db "projects/$P/locations/asia-south1/jobs/janmat-stop-db"
+          try_import google_cloud_scheduler_job.start_db "projects/$P/locations/asia-south1/jobs/janmat-start-db"
+
           echo "── Networking ──"
           try_import google_compute_network.janmat_vpc            "projects/$P/global/networks/janmat-vpc"
           try_import google_compute_subnetwork.janmat_subnet      "projects/$P/regions/asia-south1/subnetworks/janmat-subnet"
