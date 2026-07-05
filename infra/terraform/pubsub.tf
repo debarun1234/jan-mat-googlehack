@@ -13,15 +13,15 @@ resource "google_pubsub_topic" "grievance_submitted" {
   depends_on = [google_project_service.apis]
 }
 
+# Pull subscription — used by the ETL when it manually polls (local dev / batch jobs)
 resource "google_pubsub_subscription" "grievance_processor" {
   name  = "grievance-processor-sub"
   topic = google_pubsub_topic.grievance_submitted.name
 
-  ack_deadline_seconds       = 60 # 60s for Gemini processing
+  ack_deadline_seconds       = 60
   message_retention_duration = "600s"
   retain_acked_messages      = false
 
-  # Dead-letter after 5 failed attempts
   dead_letter_policy {
     dead_letter_topic     = google_pubsub_topic.grievance_dlq.id
     max_delivery_attempts = 5
@@ -31,6 +31,37 @@ resource "google_pubsub_subscription" "grievance_processor" {
     minimum_backoff = "10s"
     maximum_backoff = "60s"
   }
+}
+
+# Push subscription — sends Pub/Sub messages directly to the ETL Cloud Run service
+# This is the production path: backend publishes → Pub/Sub pushes → ETL processes
+resource "google_pubsub_subscription" "grievance_processor_push" {
+  name  = "grievance-processor-push-sub"
+  topic = google_pubsub_topic.grievance_submitted.name
+
+  ack_deadline_seconds       = 300 # ETL can take up to 5 min for heavy AI processing
+  message_retention_duration = "600s"
+  retain_acked_messages      = false
+
+  push_config {
+    push_endpoint = "${google_cloud_run_v2_service.etl.uri}/api/v1/pubsub/push"
+
+    oidc_token {
+      service_account_email = google_service_account.backend.email
+    }
+  }
+
+  dead_letter_policy {
+    dead_letter_topic     = google_pubsub_topic.grievance_dlq.id
+    max_delivery_attempts = 5
+  }
+
+  retry_policy {
+    minimum_backoff = "30s"
+    maximum_backoff = "120s"
+  }
+
+  depends_on = [google_cloud_run_v2_service.etl]
 }
 
 # Topic 2: Processing complete (triggers analytics engine)

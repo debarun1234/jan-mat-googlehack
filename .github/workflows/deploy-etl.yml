@@ -1,0 +1,81 @@
+name: Deploy ETL to Cloud Run
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "etl/**"
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-south1
+  SERVICE: janmat-etl
+  IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/janmat-etl
+
+jobs:
+  deploy:
+    name: Build & Deploy ETL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build & push image
+        run: |
+          gcloud builds submit etl/ \
+            --tag "$IMAGE:$GITHUB_SHA" \
+            --project "$PROJECT_ID" \
+            --timeout 600s
+          gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
+
+      - name: Write env vars file
+        run: |
+          cat > /tmp/etl-env.yaml << EOF
+          GCP_PROJECT_ID: "$PROJECT_ID"
+          GCP_REGION: "$REGION"
+          GCS_BUCKET: "janmat-media-${{ secrets.GCP_PROJECT_ID }}"
+          GCS_UPLOAD_FOLDER: "uploads"
+          BIGQUERY_DATASET: "janmat_analytics"
+          BIGQUERY_TABLE_GRIEVANCES: "citizen_grievances"
+          BIGQUERY_TABLE_AUDIT: "pipeline_audit"
+          PUBSUB_TOPIC_SUBMISSIONS: "grievance-submitted"
+          PUBSUB_TOPIC_DLQ: "grievance-dlq"
+          PUBSUB_SUBSCRIPTION: "grievance-processor-sub"
+          GEMINI_MODEL: "gemini-2.5-flash-lite"
+          ENVIRONMENT: "production"
+          DEBUG: "false"
+          API_HOST: "0.0.0.0"
+          API_PORT: "8000"
+          EOF
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}:${{ github.sha }}
+          project_id: ${{ env.PROJECT_ID }}
+          env_vars_file: /tmp/etl-env.yaml
+          flags: >-
+            --min-instances=0
+            --max-instances=3
+            --memory=512Mi
+            --cpu=1
+            --timeout=300
+            --port=8000
+            --no-allow-unauthenticated
+
+      - name: Print ETL URL
+        run: echo "✅ ETL deployed: ${{ steps.deploy.outputs.url }}"

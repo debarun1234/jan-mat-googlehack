@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480  # 8 hours
 
+    # ETL service — backend can forward submissions for deeper processing
+    janmat_etl_url: str = ""  # e.g. https://janmat-etl-xxx.a.run.app
+
     # App
     constituency_id: str = "KA-BLR-NORTH-01"
     cors_origins: list[str] = ["*"]
