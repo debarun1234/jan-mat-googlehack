@@ -3,29 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
+import '../theme.dart';
 import '../services/user_service.dart';
 
 class HeatmapScreen extends StatefulWidget {
   const HeatmapScreen({super.key});
-  @override State<HeatmapScreen> createState() => _HeatmapScreenState();
+  @override
+  State<HeatmapScreen> createState() => _HeatmapScreenState();
 }
 
 class _HeatmapScreenState extends State<HeatmapScreen> {
   final Completer<GoogleMapController> _mapCtrl = Completer();
-
-  // Bangalore North constituency centre
   static const _center = LatLng(13.0688, 77.5803);
 
   String _selectedCategory = 'All';
-  final _categories = ['All', 'Education', 'Health', 'Roads', 'Water', 'Sanitation'];
-  final Map<String, Color> _catColors = {
-    'All':        const Color(0xFF2196F3),
-    'Education':  const Color(0xFF9C27B0),
-    'Health':     const Color(0xFFE91E63),
-    'Roads':      const Color(0xFFFF9800),
-    'Water':      const Color(0xFF00BCD4),
-    'Sanitation': const Color(0xFF4CAF50),
-  };
+  final _categories = ['All', 'Roads', 'Water', 'Health', 'Education', 'Sanitation'];
 
   bool _loading = true;
   String? _pinCode;
@@ -45,41 +38,40 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   }
 
   Future<void> _fetchHeatmap() async {
-    setState(() { _loading = true; });
+    setState(() => _loading = true);
     try {
-      final svc = context.read<UserService>();
+      final app = context.read<AppState>();
+      final svc = UserService();
       final data = await svc.getHeatmap(
         _pinCode!,
         category: _selectedCategory == 'All' ? null : _selectedCategory,
+        token: app.token,
       );
       final raw = data['heatmap'] as List? ?? [];
       _points = raw.map((e) => HotspotPoint.fromJson(e as Map<String, dynamic>)).toList();
       _buildCircles();
-    } catch (e) {
-      // Use demo data if API unavailable
+    } catch (_) {
       _points = _demoPoints();
       _buildCircles();
-      // Don't surface error — fall back to demo data
     }
     setState(() => _loading = false);
   }
 
   void _buildCircles() {
     final cat = _selectedCategory;
-    final color = _catColors[cat] ?? const Color(0xFF2196F3);
+    final color = JanMatTheme.catColors[cat] ?? JanMatTheme.primary;
     final filtered = cat == 'All' ? _points : _points.where((p) => p.category == cat).toList();
-
-    int maxW = filtered.isEmpty ? 1 : filtered.map((p) => p.weight).reduce((a, b) => a > b ? a : b);
+    final maxW = filtered.isEmpty ? 1 : filtered.map((p) => p.weight).reduce((a, b) => a > b ? a : b);
 
     _circles = filtered.map((p) {
       final opacity = 0.15 + 0.55 * (p.weight / maxW);
-      final radius = 300.0 + 1200.0 * (p.weight / maxW);
+      final radius  = 300.0 + 1200.0 * (p.weight / maxW);
       return Circle(
         circleId: CircleId('${p.lat}_${p.lng}_${p.category}'),
         center: LatLng(p.lat, p.lng),
         radius: radius,
         fillColor: color.withValues(alpha: opacity),
-        strokeColor: color.withValues(alpha: 0.6),
+        strokeColor: color.withValues(alpha: 0.7),
         strokeWidth: 1,
       );
     }).toSet();
@@ -98,53 +90,18 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1B2D),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F1B2D),
-        elevation: 0,
-        title: const Text('Constituency Heatmap', style: TextStyle(color: Colors.white, fontSize: 18)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-            onPressed: _fetchHeatmap,
-          ),
-        ],
-      ),
+      backgroundColor: JanMatTheme.background,
       body: Column(children: [
-        // Category filter chips
-        SizedBox(
-          height: 48,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _categories.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final cat = _categories[i];
-              final selected = _selectedCategory == cat;
-              final color = _catColors[cat] ?? const Color(0xFF2196F3);
-              return FilterChip(
-                label: Text(cat, style: TextStyle(
-                  color: selected ? Colors.white : color,
-                  fontSize: 13, fontWeight: FontWeight.w500,
-                )),
-                selected: selected,
-                onSelected: (_) {
-                  setState(() => _selectedCategory = cat);
-                  _buildCircles();
-                  setState(() {});
-                },
-                backgroundColor: const Color(0xFF1A2C42),
-                selectedColor: color,
-                checkmarkColor: Colors.white,
-                side: BorderSide(color: color.withValues(alpha: 0.6)),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              );
-            },
-          ),
+        _AppBar(onRefresh: _fetchHeatmap),
+        _CategoryFilter(
+          categories: _categories,
+          selected: _selectedCategory,
+          onSelect: (c) {
+            setState(() => _selectedCategory = c);
+            _buildCircles();
+            setState(() {});
+          },
         ),
-
-        // Map
         Expanded(
           child: Stack(children: [
             GoogleMap(
@@ -156,67 +113,147 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
               zoomControlsEnabled: false,
               compassEnabled: true,
             ),
-
             if (_loading)
               Container(
                 color: Colors.black45,
-                child: const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3))),
+                child: const Center(child: CircularProgressIndicator(color: JanMatTheme.primary)),
               ),
-
-            // Legend
-            Positioned(
-              bottom: 120,
-              right: 12,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xEE0F1B2D),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2A4060)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Complaint Density', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    _legendRow(Colors.red.withValues(alpha: 0.8),   'High'),
-                    _legendRow(Colors.orange.withValues(alpha: 0.7), 'Medium'),
-                    _legendRow(Colors.blue.withValues(alpha: 0.5),  'Low'),
-                  ],
-                ),
-              ),
-            ),
-
-            // Transparency banner
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                color: const Color(0xEE0F1B2D),
-                child: Row(children: const [
-                  Icon(Icons.info_outline, color: Color(0xFF4CAF50), size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'This map shows aggregated, anonymized complaint patterns in your constituency. Your MP uses this data to prioritize development projects.',
-                      style: TextStyle(color: Color(0xFF8899AA), fontSize: 11, height: 1.4),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
+            _Legend(),
+            _InfoBanner(),
           ]),
         ),
       ]),
     );
   }
+}
 
-  Widget _legendRow(Color color, String label) => Padding(
+class _AppBar extends StatelessWidget {
+  final VoidCallback onRefresh;
+  const _AppBar({required this.onRefresh});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: JanMatTheme.background,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 12, 10),
+          child: Row(children: [
+            const Icon(Icons.map_rounded, color: JanMatTheme.primary, size: 22),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Constituency Heatmap', style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
+                Text('Live complaint density', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
+              ]),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: JanMatTheme.primary),
+              onPressed: onRefresh,
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryFilter extends StatelessWidget {
+  final List<String> categories;
+  final String selected;
+  final ValueChanged<String> onSelect;
+  const _CategoryFilter({required this.categories, required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      color: JanMatTheme.background,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final cat = categories[i];
+          final isSelected = selected == cat;
+          final color = JanMatTheme.catColors[cat] ?? JanMatTheme.primary;
+          return GestureDetector(
+            onTap: () => onSelect(cat),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected ? color : JanMatTheme.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? color : JanMatTheme.border),
+              ),
+              child: Text(
+                cat,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : color,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Legend extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 80, right: 12,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: JanMatTheme.surface.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: JanMatTheme.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Density', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          _Row(Colors.red.withValues(alpha: 0.8),    'High'),
+          _Row(Colors.orange.withValues(alpha: 0.7), 'Medium'),
+          _Row(Colors.blue.withValues(alpha: 0.5),  'Low'),
+        ]),
+      ),
+    );
+  }
+
+  Widget _Row(Color c, String l) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
     child: Row(children: [
-      Container(width: 14, height: 14, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 8),
-      Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+      Container(width: 12, height: 12, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+      const SizedBox(width: 6),
+      Text(l, style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
     ]),
   );
+}
+
+class _InfoBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 0, left: 0, right: 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: JanMatTheme.surface.withValues(alpha: 0.95),
+        child: const Row(children: [
+          Icon(Icons.info_outline_rounded, color: JanMatTheme.accent, size: 16),
+          SizedBox(width: 8),
+          Expanded(child: Text(
+            'Aggregated, anonymised complaint patterns. Your MP uses this data to prioritise development projects.',
+            style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 11, height: 1.4),
+          )),
+        ]),
+      ),
+    );
+  }
 }

@@ -1,296 +1,244 @@
-import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
-
 import '../main.dart';
+import '../theme.dart';
 import '../services/api_service.dart';
-import '../widgets/result_card.dart';
 
-class AudioSubmissionScreen extends StatefulWidget {
-  const AudioSubmissionScreen({super.key});
-
+class AudioScreen extends StatefulWidget {
+  const AudioScreen({super.key});
   @override
-  State<AudioSubmissionScreen> createState() => _AudioSubmissionScreenState();
+  State<AudioScreen> createState() => _AudioScreenState();
 }
 
-class _AudioSubmissionScreenState extends State<AudioSubmissionScreen>
-    with SingleTickerProviderStateMixin {
-  final AudioRecorder _recorder = AudioRecorder();
-  bool _isRecording = false;
+class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin {
+  final _record = AudioRecorder();
+  bool _recording = false;
   bool _hasRecording = false;
-  String? _audioPath;
-  bool _loading = false;
-  SubmissionResult? _result;
-  String? _error;
-  Position? _position;
+  bool _submitting = false;
+  String? _filePath;
   Duration _elapsed = Duration.zero;
-  late AnimationController _pulseCtrl;
+  Timer? _timer;
+  String? _result;
+  String? _error;
+
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
 
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _getLocation();
-  }
-
-  Future<void> _getLocation() async {
-    try {
-      await Geolocator.requestPermission();
-      _position = await Geolocator.getCurrentPosition();
-    } catch (_) {}
-  }
-
-  Future<void> _startRecording() async {
-    final permitted = await _recorder.hasPermission();
-    if (!permitted) {
-      setState(() => _error = 'Microphone permission required');
-      return;
-    }
-    final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/janmat_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
-      path: path,
-    );
-    _audioPath = path;
-    _elapsed = Duration.zero;
-    setState(() { _isRecording = true; _error = null; });
-    _pulseCtrl.repeat(reverse: true);
-
-    // Timer for elapsed
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!_isRecording) return false;
-      setState(() => _elapsed += const Duration(seconds: 1));
-      if (_elapsed.inSeconds >= 120) { await _stopRecording(); return false; }
-      return true;
-    });
-  }
-
-  Future<void> _stopRecording() async {
-    await _recorder.stop();
-    _pulseCtrl.stop();
-    setState(() { _isRecording = false; _hasRecording = true; });
-  }
-
-  Future<void> _submit() async {
-    if (_audioPath == null) return;
-    setState(() { _loading = true; _error = null; _result = null; });
-
-    try {
-      final api = context.read<ApiService>();
-      final result = await api.submitAudio(
-        audioFile: File(_audioPath!),
-        latitude: _position?.latitude,
-        longitude: _position?.longitude,
-      );
-      setState(() { _result = result; _loading = false; });
-
-      if (result.category != null) {
-        context.read<SubmissionState>().addSubmission(SubmissionRecord(
-          submissionId: result.submissionId,
-          type: 'audio',
-          category: result.category!,
-          urgency: result.urgencyRating ?? 3,
-          summary: result.summaryEn ?? 'Voice submission',
-          submittedAt: DateTime.now(),
-        ));
-      }
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
-    }
-  }
-
-  void _reset() {
-    setState(() {
-      _hasRecording = false;
-      _audioPath = null;
-      _result = null;
-      _error = null;
-      _elapsed = Duration.zero;
-    });
-  }
-
-  String get _elapsedStr {
-    final m = _elapsed.inMinutes.toString().padLeft(2, '0');
-    final s = (_elapsed.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _pulseAnim = Tween(begin: 0.9, end: 1.1).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
   void dispose() {
-    _recorder.dispose();
     _pulseCtrl.dispose();
+    _timer?.cancel();
+    _record.dispose();
     super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    final hasPermission = await _record.hasPermission();
+    if (!hasPermission) {
+      _showError('Microphone permission denied. Please enable it in Settings.');
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    _filePath = '${dir.path}/janmat_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _record.start(const RecordConfig(), path: _filePath!);
+    _elapsed = Duration.zero;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
+    });
+    setState(() { _recording = true; _hasRecording = false; _result = null; _error = null; });
+  }
+
+  Future<void> _stopRecording() async {
+    await _record.stop();
+    _timer?.cancel();
+    setState(() { _recording = false; _hasRecording = true; });
+  }
+
+  void _discard() {
+    setState(() { _hasRecording = false; _filePath = null; _elapsed = Duration.zero; _result = null; _error = null; });
+  }
+
+  Future<void> _submit() async {
+    if (_filePath == null) return;
+    setState(() { _submitting = true; _error = null; });
+    final app = context.read<AppState>();
+    try {
+      final svc = ApiService();
+      final res = await svc.submitAudio(_filePath!, token: app.token);
+      if (mounted) setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Submission failed. Please try again.'; _submitting = false; });
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg), backgroundColor: JanMatTheme.errorColor,
+    ));
+  }
+
+  String _fmtDuration(Duration d) {
+    final m = d.inMinutes.toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🎙️  Voice Submission')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-
-            // Language hint
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🌐', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Hindi • Kannada • Tamil • Telugu\nBengali • Marathi • English',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: Colors.blue[800], fontWeight: FontWeight.w600),
+      backgroundColor: JanMatTheme.background,
+      appBar: AppBar(
+        backgroundColor: JanMatTheme.background,
+        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+        title: const Text('Voice Note'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(children: [
+            const Spacer(),
+            // Timer
+            Text(_fmtDuration(_elapsed), style: const TextStyle(color: JanMatTheme.textPrimary, fontSize: 56, fontWeight: FontWeight.w200, letterSpacing: 2)),
+            const SizedBox(height: 8),
+            Text(
+              _recording ? 'Recording...' : (_hasRecording ? 'Recording complete' : 'Tap to record'),
+              style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 48),
+            // Pulse rings + mic button
+            SizedBox(
+              width: 200, height: 200,
+              child: Stack(alignment: Alignment.center, children: [
+                if (_recording) ...[
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, __) => Container(
+                      width: 180 * _pulseAnim.value, height: 180 * _pulseAnim.value,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: JanMatTheme.primary.withValues(alpha: 0.08),
+                        border: Border.all(color: JanMatTheme.primary.withValues(alpha: 0.2)),
+                      ),
+                    ),
+                  ),
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, __) => Container(
+                      width: 140 * _pulseAnim.value, height: 140 * _pulseAnim.value,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: JanMatTheme.primary.withValues(alpha: 0.1),
+                      ),
+                    ),
                   ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Big record button
-            AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (_, child) {
-                final scale = _isRecording ? 1.0 + _pulseCtrl.value * 0.12 : 1.0;
-                return Transform.scale(
-                  scale: scale,
-                  child: child,
-                );
-              },
-              child: GestureDetector(
-                onTap: _isRecording ? _stopRecording : (_hasRecording ? null : _startRecording),
-                child: Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isRecording ? Colors.red : (_hasRecording ? Colors.green : const Color(0xFF1A237E)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isRecording ? Colors.red : const Color(0xFF1A237E)).withValues(alpha: 0.3),
-                        blurRadius: 24,
-                        spreadRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    _isRecording ? Icons.stop : (_hasRecording ? Icons.check : Icons.mic),
-                    size: 60,
-                    color: Colors.white,
+                GestureDetector(
+                  onTap: _recording ? _stopRecording : (_hasRecording ? null : _startRecording),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 100, height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: _recording
+                        ? const LinearGradient(colors: [Color(0xFFFF4D6D), Color(0xFFFF6B35)])
+                        : (_hasRecording ? const LinearGradient(colors: [JanMatTheme.accent, JanMatTheme.primary]) : JanMatTheme.primaryGradient),
+                      boxShadow: [BoxShadow(
+                        color: (_recording ? JanMatTheme.errorColor : JanMatTheme.primary).withValues(alpha: 0.4),
+                        blurRadius: 24, spreadRadius: 4,
+                      )],
+                    ),
+                    child: Icon(
+                      _recording ? Icons.stop_rounded : (_hasRecording ? Icons.check_rounded : Icons.mic_rounded),
+                      color: Colors.white, size: 44,
+                    ),
                   ),
                 ),
-              ),
+              ]),
             ),
-
-            const SizedBox(height: 16),
-
-            if (_isRecording) ...[
-              Text(
-                _elapsedStr,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'monospace'),
-              ),
-              const SizedBox(height: 4),
-              const Text('Recording... tap to stop', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-            ] else if (_hasRecording) ...[
-              const Text('Recording ready', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.green)),
-              const SizedBox(height: 4),
-              Text('Duration: $_elapsedStr', style: TextStyle(color: Colors.grey[600])),
-              const SizedBox(height: 4),
-              TextButton(onPressed: _reset, child: const Text('Re-record')),
-            ] else ...[
-              const Text(
-                'Press to start recording',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text('Max 2 minutes', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-            ],
-
-            if (!_isRecording && !_hasRecording) ...[
-              const SizedBox(height: 32),
-              const _Instruction(icon: '1️⃣', text: 'Tap the mic button to start'),
-              const SizedBox(height: 8),
-              const _Instruction(icon: '2️⃣', text: 'Speak clearly about your problem'),
-              const SizedBox(height: 8),
-              const _Instruction(icon: '3️⃣', text: 'Tap again to stop, then submit'),
-            ],
-
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8)),
-                child: Text(_error!, style: TextStyle(color: Colors.red[700], fontSize: 13)),
-              ),
-            ],
-
+            const SizedBox(height: 48),
+            // Action buttons
             if (_hasRecording && _result == null) ...[
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A237E),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _loading
-                      ? const SizedBox(width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : const Text('Submit / जमा करें', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                ),
-              ),
+              JMButton(label: 'Submit Recording', loading: _submitting, icon: Icons.send_rounded, onPressed: _submitting ? null : _submit),
+              const SizedBox(height: 12),
+              JMButton(label: 'Discard & Re-record', outlined: true, onPressed: _discard),
             ],
-
             if (_result != null) ...[
-              const SizedBox(height: 24),
-              ResultCard(result: _result!),
+              _SuccessBanner(submissionId: _result!),
               const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: _reset,
-                child: const Text('Submit Another / फिर से'),
-              ),
+              JMButton(label: 'Submit Another', outlined: true, onPressed: _discard),
             ],
-          ],
+            if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: JanMatTheme.errorColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: JanMatTheme.errorColor.withValues(alpha: 0.3))),
+                child: Row(children: [
+                  const Icon(Icons.error_outline_rounded, color: JanMatTheme.errorColor, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_error!, style: const TextStyle(color: JanMatTheme.errorColor, fontSize: 13))),
+                ]),
+              ),
+            const Spacer(),
+            const _LanguageNote(),
+            const SizedBox(height: 16),
+          ]),
         ),
       ),
     );
   }
 }
 
-class _Instruction extends StatelessWidget {
-  final String icon;
-  final String text;
-  const _Instruction({required this.icon, required this.text});
-
+class _SuccessBanner extends StatelessWidget {
+  final String submissionId;
+  const _SuccessBanner({required this.submissionId});
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(icon, style: const TextStyle(fontSize: 18)),
-        const SizedBox(width: 8),
-        Text(text, style: TextStyle(color: Colors.grey[700], fontSize: 14)),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: JanMatTheme.accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: JanMatTheme.accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.check_circle_rounded, color: JanMatTheme.accent, size: 28),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Submitted Successfully!', style: TextStyle(color: JanMatTheme.accent, fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 2),
+          Text('ID: $submissionId', style: const TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
+        ])),
+      ]),
+    );
+  }
+}
+
+class _LanguageNote extends StatelessWidget {
+  const _LanguageNote();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: JanMatTheme.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: JanMatTheme.border),
+      ),
+      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.translate_rounded, color: JanMatTheme.primary, size: 16),
+        SizedBox(width: 8),
+        Text('Supports Hindi, Kannada, Tamil, Telugu, Bengali & English', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
+      ]),
     );
   }
 }

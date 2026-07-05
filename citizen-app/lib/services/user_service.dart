@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const _kBaseUrl = 'https://janmat-backend-w2w3osjaua-el.a.run.app';
+
 class UserProfile {
   final String userId;
   final String phoneNumber;
@@ -26,15 +28,18 @@ class UserProfile {
     this.submissionCount = 0,
   });
 
+  String get name => fullName ?? 'Citizen';
+  String get constituency => constituencyId ?? city ?? 'Your Area';
+
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
-    userId:         j['user_id'] ?? '',
-    phoneNumber:    j['phone_number'] ?? '',
-    fullName:       j['full_name'],
-    town:           j['town'],
-    city:           j['city'],
-    state:          j['state'],
-    pinCode:        j['pin_code'],
-    constituencyId: j['constituency_id'],
+    userId:          j['user_id'] ?? '',
+    phoneNumber:     j['phone_number'] ?? '',
+    fullName:        j['full_name'],
+    town:            j['town'],
+    city:            j['city'],
+    state:           j['state'],
+    pinCode:         j['pin_code'],
+    constituencyId:  j['constituency_id'],
     profileComplete: j['profile_complete'] ?? false,
     submissionCount: j['submission_count'] ?? 0,
   );
@@ -48,8 +53,8 @@ class HotspotPoint {
   final double avgUrgency;
 
   const HotspotPoint({
-    required this.lat,required this.lng,required this.weight,
-    required this.category,required this.avgUrgency,
+    required this.lat, required this.lng, required this.weight,
+    required this.category, required this.avgUrgency,
   });
 
   factory HotspotPoint.fromJson(Map<String, dynamic> j) => HotspotPoint(
@@ -62,26 +67,21 @@ class HotspotPoint {
 }
 
 class UserService {
-  final Dio _dio;
-  String? _token;
+  late final Dio _dio;
 
-  UserService({required String baseUrl})
-    : _dio = Dio(BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 30),
-      ));
-
-  Future<void> _loadToken() async {
-    if (_token != null) return;
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('janmat_token');
+  UserService() {
+    _dio = Dio(BaseOptions(
+      baseUrl: _kBaseUrl,
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 30),
+    ));
   }
 
-  Map<String, String> get _authHeaders =>
-    _token != null ? {'Authorization': 'Bearer $_token'} : {};
+  Options _auth(String? token) => Options(
+    headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+  );
 
-  /// Exchange Firebase UID + ID token for our JWT
+  // ── Auth ─────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> authenticate({
     required String firebaseUid,
     required String phoneNumber,
@@ -92,58 +92,65 @@ class UserService {
       'phone_number': phoneNumber,
       if (idToken != null) 'id_token': idToken,
     });
-    _token = resp.data['access_token'];
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('janmat_token', _token!);
-    await prefs.setString('janmat_user_id', resp.data['user_id'] ?? '');
-    return resp.data;
+    final token = resp.data['access_token'] as String?;
+    if (token != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('janmat_token', token);
+      await prefs.setString('janmat_user_id', resp.data['user_id'] ?? '');
+    }
+    return Map<String, dynamic>.from(resp.data);
   }
 
-  /// Create or update user profile
+  // ── Profile ──────────────────────────────────────────────────────────
   Future<UserProfile> saveProfile({
     required String fullName,
     required String city,
     required String state,
     required String pinCode,
     required String phoneNumber,
+    String? token,
     String? town,
   }) async {
-    await _loadToken();
     final resp = await _dio.post(
       '/users/profile',
       data: {
-        'full_name':    fullName,
-        'city':         city,
-        'state':        state,
-        'pin_code':     pinCode,
-        'phone_number': phoneNumber,
+        'full_name': fullName, 'city': city, 'state': state,
+        'pin_code': pinCode, 'phone_number': phoneNumber,
         if (town != null && town.isNotEmpty) 'town': town,
       },
-      options: Options(headers: _authHeaders),
+      options: _auth(token),
     );
-    return UserProfile.fromJson(resp.data);
+    return UserProfile.fromJson(Map<String, dynamic>.from(resp.data));
   }
 
-  /// Get own profile
-  Future<UserProfile> getProfile() async {
-    await _loadToken();
-    final resp = await _dio.get('/users/profile',
-      options: Options(headers: _authHeaders));
-    return UserProfile.fromJson(resp.data);
+  Future<UserProfile?> getProfile(String token) async {
+    try {
+      final resp = await _dio.get('/users/profile', options: _auth(token));
+      return UserProfile.fromJson(Map<String, dynamic>.from(resp.data));
+    } catch (_) { return null; }
   }
 
-  /// Constituency heatmap data for citizen view
-  Future<Map<String, dynamic>> getHeatmap(String pinCode, {String? category}) async {
-    await _loadToken();
+  // ── Stats ─────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getStats(String token) async {
+    try {
+      final resp = await _dio.get('/users/stats', options: _auth(token));
+      return Map<String, dynamic>.from(resp.data);
+    } catch (_) {
+      return {'total_submissions': 0, 'processed': 0, 'pending': 0};
+    }
+  }
+
+  // ── Heatmap ───────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getHeatmap(String pinCode, {String? category, String? token}) async {
     final resp = await _dio.get(
       '/users/heatmap/$pinCode',
-      queryParameters: { if (category != null) 'category': category },
-      options: Options(headers: _authHeaders),
+      queryParameters: {if (category != null) 'category': category},
+      options: _auth(token),
     );
-    return resp.data;
+    return Map<String, dynamic>.from(resp.data);
   }
 
-  /// Check if token is stored (user was previously logged in)
+  // ── Session ───────────────────────────────────────────────────────────
   Future<bool> hasStoredSession() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey('janmat_token');
