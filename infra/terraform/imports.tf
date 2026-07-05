@@ -40,7 +40,7 @@ import {
 
 import {
   to = google_vpc_access_connector.janmat_connector
-  id = "projects/${var.project_id}/locations/asia-south1/connectors/janmat-connector"
+  id = "projects/${var.project_id}/locations/asia-south1/connectors/janmat-vpc-connector"
 }
 
 import {

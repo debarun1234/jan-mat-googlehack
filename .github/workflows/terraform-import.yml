@@ -101,7 +101,7 @@ jobs:
           try_import google_compute_network.janmat_vpc            "projects/$P/global/networks/janmat-vpc"
           try_import google_compute_subnetwork.janmat_subnet      "projects/$P/regions/asia-south1/subnetworks/janmat-subnet"
           try_import google_compute_global_address.private_ip_range "projects/$P/global/addresses/janmat-private-ip-range"
-          try_import google_vpc_access_connector.janmat_connector "projects/$P/locations/asia-south1/connectors/janmat-connector"
+          try_import google_vpc_access_connector.janmat_connector "projects/$P/locations/asia-south1/connectors/janmat-vpc-connector"
           try_import google_compute_firewall.allow_internal        "projects/$P/global/firewalls/janmat-allow-internal"
           try_import google_compute_firewall.deny_ingress          "projects/$P/global/firewalls/janmat-deny-ingress"
 
