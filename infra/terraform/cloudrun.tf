@@ -394,12 +394,11 @@ resource "google_cloud_run_v2_service" "etl" {
   }
 }
 
-# ETL is called by the backend — no public access needed
-# Backend SA already has run.invoker via backend_roles
-resource "google_cloud_run_v2_service_iam_member" "etl_backend_invoker" {
+# ETL is public — dashboard and backend both call it directly
+resource "google_cloud_run_v2_service_iam_member" "etl_public_access" {
   project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_service.etl.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.backend.email}"
+  member   = "allUsers"
 }

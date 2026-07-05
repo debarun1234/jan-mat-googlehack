@@ -41,23 +41,25 @@ jobs:
 
       - name: Write env vars file
         run: |
-          cat > /tmp/etl-env.yaml << EOF
-          GCP_PROJECT_ID: "$PROJECT_ID"
-          GCP_REGION: "$REGION"
-          GCS_BUCKET: "janmat-media-${{ secrets.GCP_PROJECT_ID }}"
-          GCS_UPLOAD_FOLDER: "uploads"
-          BIGQUERY_DATASET: "janmat_analytics"
-          BIGQUERY_TABLE_GRIEVANCES: "citizen_grievances"
-          BIGQUERY_TABLE_AUDIT: "pipeline_audit"
-          PUBSUB_TOPIC_SUBMISSIONS: "grievance-submitted"
-          PUBSUB_TOPIC_DLQ: "grievance-dlq"
-          PUBSUB_SUBSCRIPTION: "grievance-processor-sub"
-          GEMINI_MODEL: "gemini-2.5-flash-lite"
-          ENVIRONMENT: "production"
-          DEBUG: "false"
-          API_HOST: "0.0.0.0"
-          API_PORT: "8000"
-          EOF
+          cat > /tmp/etl-env.yaml <<'ENVEOF'
+GCP_PROJECT_ID: "$PROJECT_ID"
+GCP_REGION: "asia-south1"
+GCS_BUCKET: "janmat-media-$PROJECT_ID"
+GCS_UPLOAD_FOLDER: "uploads"
+BIGQUERY_DATASET: "janmat_analytics"
+BIGQUERY_TABLE_GRIEVANCES: "citizen_grievances"
+BIGQUERY_TABLE_AUDIT: "pipeline_audit"
+PUBSUB_TOPIC_SUBMISSIONS: "grievance-submitted"
+PUBSUB_TOPIC_DLQ: "grievance-dlq"
+PUBSUB_SUBSCRIPTION: "grievance-processor-sub"
+GEMINI_MODEL: "gemini-2.5-flash-lite"
+ENVIRONMENT: "production"
+DEBUG: "false"
+API_HOST: "0.0.0.0"
+API_PORT: "8000"
+ENVEOF
+          # Replace shell vars (single-quoted heredoc prevents expansion above)
+          sed -i "s/\$PROJECT_ID/$PROJECT_ID/g" /tmp/etl-env.yaml
 
       - name: Deploy to Cloud Run
         id: deploy
@@ -68,14 +70,14 @@ jobs:
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
           env_vars_file: /tmp/etl-env.yaml
+          port: 8000
           flags: >-
             --min-instances=0
             --max-instances=3
             --memory=512Mi
             --cpu=1
             --timeout=300
-            --port=8000
-            --no-allow-unauthenticated
+            --allow-unauthenticated
 
       - name: Print ETL URL
         run: echo "✅ ETL deployed: ${{ steps.deploy.outputs.url }}"
