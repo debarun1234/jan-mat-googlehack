@@ -1,7 +1,7 @@
 "use strict";
 require("dotenv").config();
 const express = require("express");
-const session = require("express-session");
+const cookieSession = require("cookie-session");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const axios = require("axios");
@@ -23,12 +23,24 @@ const ALLOWED_EMAILS = ALLOW_ALL_EMAILS ? [] : ALLOWED_EMAILS_RAW.split(",").map
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
-app.use(session({
-  secret: process.env.SESSION_SECRET || "janmat-dev-secret-change-me",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 8 * 60 * 60 * 1000 },
+
+// cookie-session: stores all session state in a signed client-side cookie.
+// This is stateless — works across all Cloud Run instances with no shared memory store.
+app.use(cookieSession({
+  name:   "janmat_sess",
+  keys:   [process.env.SESSION_SECRET || "janmat-dev-secret-change-me"],
+  maxAge: 8 * 60 * 60 * 1000, // 8 hours
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
 }));
+
+// Passport compatibility shim for cookie-session (passport expects regenerate/save on session)
+app.use((req, _res, next) => {
+  if (req.session && !req.session.regenerate) req.session.regenerate = (cb) => { cb(); };
+  if (req.session && !req.session.save)       req.session.save       = (cb) => { cb(); };
+  next();
+});
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -84,7 +96,7 @@ app.get("/auth/google/callback",
         name:        req.user.name,
         service_key: DASHBOARD_SERVICE_KEY,
         constituency_id: req.user.constituency_id || "KA-BLR-NORTH-01",
-      }, { headers: { "Content-Type": "application/json" }, timeout: 5000 });
+      }, { headers: { "Content-Type": "application/json" }, timeout: 20000 });
       req.session.apiToken = data.access_token;
     } catch (err) {
       console.error("Backend JWT exchange failed:", err.response?.data || err.message);

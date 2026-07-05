@@ -38,6 +38,53 @@
     .note{
       text-align:center;margin-top:24px;font-size:.78rem;color:#90a4ae;line-height:1.5;
     }
+    /* ── Cookie banner ── */
+    #cookie-banner{
+      position:fixed;bottom:0;left:0;right:0;
+      background:#1a237e;color:#e8eaf6;
+      padding:16px 24px;
+      display:flex;align-items:center;justify-content:space-between;gap:16px;
+      font-size:.82rem;line-height:1.5;
+      box-shadow:0 -4px 24px rgba(0,0,0,.3);
+      z-index:9999;
+    }
+    #cookie-banner.hidden{display:none}
+    #cookie-banner a{color:#90caf9;text-decoration:underline;cursor:pointer}
+    #cookie-banner .cookie-actions{display:flex;gap:10px;flex-shrink:0}
+    .btn-cookie-accept{
+      background:#4caf50;color:#fff;border:none;
+      padding:8px 20px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;
+      white-space:nowrap;transition:background .2s;
+    }
+    .btn-cookie-accept:hover{background:#388e3c}
+    .btn-cookie-decline{
+      background:transparent;color:#90caf9;border:1px solid #5c6bc0;
+      padding:8px 16px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;
+      white-space:nowrap;transition:all .2s;
+    }
+    .btn-cookie-decline:hover{background:rgba(255,255,255,.08)}
+    /* ── Cookie detail modal ── */
+    #cookie-modal{
+      display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+      z-index:10000;align-items:center;justify-content:center;
+    }
+    #cookie-modal.open{display:flex}
+    .cookie-modal-box{
+      background:#fff;border-radius:16px;padding:32px;max-width:520px;width:90%;
+      box-shadow:0 24px 80px rgba(0,0,0,.4);
+    }
+    .cookie-modal-box h2{color:#1a237e;font-size:1.15rem;margin-bottom:8px}
+    .cookie-modal-box p{font-size:.85rem;color:#546e7a;margin-bottom:16px;line-height:1.6}
+    .cookie-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:20px}
+    .cookie-table th{background:#e8eaf6;color:#1a237e;padding:8px 12px;text-align:left;font-weight:700}
+    .cookie-table td{padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#37474f;vertical-align:top}
+    .cookie-table tr:last-child td{border-bottom:none}
+    .tag-essential{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:700}
+    .cookie-modal-close{
+      margin-top:4px;width:100%;padding:11px;background:#1a237e;color:#fff;
+      border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;
+    }
+    .cookie-modal-close:hover{background:#283593}
   </style>
 </head>
 <body>
@@ -63,7 +110,58 @@
 
   <div class="note">Access is restricted to authorized Members of Parliament.</div>
 </div>
+
+<!-- ── Cookie Consent Banner ── -->
+<div id="cookie-banner">
+  <span>
+    🍪 This site uses a strictly necessary session cookie (<strong>janmat_sess</strong>) to keep you signed in.
+    No tracking, no ads, no third-party sharing.
+    <a onclick="document.getElementById('cookie-modal').classList.add('open')" role="button" tabindex="0">Learn more</a>
+  </span>
+  <div class="cookie-actions">
+    <button class="btn-cookie-decline" onclick="dismissBanner(false)">Decline non-essential</button>
+    <button class="btn-cookie-accept" onclick="dismissBanner(true)">Accept &amp; Continue</button>
+  </div>
+</div>
+
+<!-- ── Cookie Detail Modal ── -->
+<div id="cookie-modal" role="dialog" aria-modal="true" aria-labelledby="cookie-modal-title">
+  <div class="cookie-modal-box">
+    <h2 id="cookie-modal-title">🍪 Cookies used by JanMat</h2>
+    <p>
+      JanMat uses only <strong>one cookie</strong>, which is strictly necessary for authentication.
+      We do not use analytics cookies, advertising cookies, or any third-party tracking.
+    </p>
+    <table class="cookie-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Purpose</th>
+          <th>Duration</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>janmat_sess</strong></td>
+          <td>Stores your authenticated login session so you remain signed in while using the MP Dashboard. Contains a cryptographically signed token — no personal data is readable without the server key.</td>
+          <td>8 hours (auto-expires)</td>
+          <td><span class="tag-essential">Essential</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:.78rem;color:#78909c">
+      This cookie is set only after you sign in with Google. Declining means you will not be able to use the dashboard.
+      No data is shared with advertisers or analytics providers.
+    </p>
+    <button class="cookie-modal-close" onclick="document.getElementById('cookie-modal').classList.remove('open')">
+      Close
+    </button>
+  </div>
+</div>
+
 <script>
+  // ── Error message ─────────────────────────────────────────────────────
   const p = new URLSearchParams(location.search);
   if (p.get('error')) {
     const el = document.getElementById('error-msg');
@@ -71,6 +169,26 @@
     el.textContent = msgs[p.get('error')] || decodeURIComponent(p.get('error'));
     el.style.display = 'block';
   }
+
+  // ── Cookie banner ─────────────────────────────────────────────────────
+  (function () {
+    const CONSENT_KEY = 'janmat_cookie_consent';
+    const banner = document.getElementById('cookie-banner');
+    if (localStorage.getItem(CONSENT_KEY)) {
+      banner.classList.add('hidden');
+    }
+  })();
+
+  function dismissBanner(accepted) {
+    localStorage.setItem('janmat_cookie_consent', accepted ? 'accepted' : 'declined');
+    document.getElementById('cookie-banner').classList.add('hidden');
+    document.getElementById('cookie-modal').classList.remove('open');
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('cookie-modal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('open');
+  });
 </script>
 </body>
 </html>
