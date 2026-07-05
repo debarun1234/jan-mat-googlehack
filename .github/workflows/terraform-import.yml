@@ -1,0 +1,108 @@
+name: Terraform - One-time State Import
+
+# ── Run this ONCE to sync existing GCP resources into Terraform state.
+# After the first successful run, this workflow is never needed again —
+# all future resources are created and managed by terraform apply.
+# ─────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.9.x"
+
+jobs:
+  import:
+    name: Import existing GCP resources into state
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Write terraform.tfvars
+        run: |
+          cat > terraform.tfvars <<EOF
+          project_id       = "${{ secrets.GCP_PROJECT_ID }}"
+          region           = "asia-south1"
+          zone             = "asia-south1-a"
+          environment      = "poc"
+          db_password      = "${{ secrets.DB_PASSWORD }}"
+          db_name          = "janmat"
+          db_user          = "janmat_user"
+          db_stop_schedule = "30 17 * * *"
+          db_start_schedule = "30 1 * * *"
+          gemini_model     = "gemini-2.5-flash-lite"
+          constituency_id  = "KA-BLR-NORTH-01"
+          EOF
+
+      - name: Terraform Init
+        run: terraform init -upgrade
+
+      - name: Import all existing resources (state-aware, non-blocking)
+        run: |
+          P="${{ secrets.GCP_PROJECT_ID }}"
+
+          # Only imports if NOT already in state — safe to run multiple times
+          try_import() {
+            local addr="$1" id="$2"
+            if terraform state show "$addr" > /dev/null 2>&1; then
+              echo "  ✓ already in state: $addr"
+            else
+              echo "  → importing: $addr"
+              terraform import "$addr" "$id" 2>&1 | tail -1 || true
+            fi
+          }
+
+          echo "── BigQuery ──"
+          try_import google_bigquery_dataset.analytics      "$P/janmat_analytics"
+          try_import google_bigquery_dataset.infrastructure "$P/janmat_infrastructure"
+
+          echo "── Secret Manager ──"
+          try_import google_secret_manager_secret.db_url               "projects/$P/secrets/janmat-db-url"
+          try_import google_secret_manager_secret.maps_api_key         "projects/$P/secrets/janmat-maps-api-key"
+          try_import google_secret_manager_secret.gemini_api_key       "projects/$P/secrets/janmat-gemini-api-key"
+          try_import google_secret_manager_secret.jwt_secret           "projects/$P/secrets/janmat-jwt-secret"
+          try_import google_secret_manager_secret.google_client_id     "projects/$P/secrets/janmat-google-client-id"
+          try_import google_secret_manager_secret.google_client_secret "projects/$P/secrets/janmat-google-client-secret"
+          try_import google_secret_manager_secret.session_secret       "projects/$P/secrets/janmat-session-secret"
+
+          echo "── GCS Buckets ──"
+          try_import google_storage_bucket.media   "janmat-media-$P"
+          try_import google_storage_bucket.tfplans "janmat-tfplans-$P"
+          try_import google_storage_bucket.logs    "janmat-logs-$P"
+          try_import google_storage_bucket.exports "janmat-exports-$P"
+
+          echo "── Service Accounts ──"
+          try_import google_service_account.backend   "projects/$P/serviceAccounts/janmat-backend@$P.iam.gserviceaccount.com"
+          try_import google_service_account.scheduler "projects/$P/serviceAccounts/janmat-scheduler@$P.iam.gserviceaccount.com"
+          try_import google_service_account.github_ci "projects/$P/serviceAccounts/janmat-github-ci@$P.iam.gserviceaccount.com"
+
+          echo "── Networking ──"
+          try_import google_compute_network.janmat_vpc "projects/$P/global/networks/janmat-vpc"
+
+          echo "── Pub/Sub ──"
+          try_import google_pubsub_topic.grievance_submitted "projects/$P/topics/grievance-submitted"
+          try_import google_pubsub_topic.processing_complete "projects/$P/topics/processing-complete"
+          try_import google_pubsub_topic.priority_updated    "projects/$P/topics/priority-updated"
+          try_import google_pubsub_topic.grievance_dlq       "projects/$P/topics/grievance-dlq"
+
+      - name: Show final state summary
+        run: |
+          echo "=== Resources now in state ==="
+          terraform state list

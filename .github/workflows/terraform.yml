@@ -1,5 +1,9 @@
 name: Terraform Plan / Apply
 
+# ── Trigger rules ───────────────────────────────────────────────────────
+# PR  → import (once, state-aware) + plan + post comment
+# Push to master (PR merge) → apply saved plan from GCS
+# workflow_dispatch → manual plan or apply
 on:
   pull_request:
     branches: [master]
@@ -11,22 +15,31 @@ on:
     paths:
       - "infra/terraform/**"
   workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: false
+        type: choice
+        options: [plan, apply]
+        default: plan
 
 env:
   TF_VERSION: "1.9.x"
-  # Bucket name matches gcs.tf: janmat-tfplans-{project_id}
   GCS_PLAN_BUCKET: "janmat-tfplans-${{ secrets.GCP_PROJECT_ID }}"
 
 jobs:
-  terraform:
-    name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || 'Apply' }}
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 1: PLAN  — runs on PRs and workflow_dispatch(plan)
+  # Imports existing resources, plans, posts comment, saves plan to GCS
+  # ════════════════════════════════════════════════════════════════════
+  plan:
+    name: Terraform Plan
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.action == 'plan')
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       id-token: write
       pull-requests: write
-
     defaults:
       run:
         working-directory: infra/terraform
@@ -39,6 +52,8 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SA }}
 
+      - uses: google-github-actions/setup-gcloud@v2
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -46,91 +61,33 @@ jobs:
       - name: Write terraform.tfvars
         run: |
           cat > terraform.tfvars <<EOF
-          project_id = "${{ secrets.GCP_PROJECT_ID }}"
-          region = "asia-south1"
-          zone = "asia-south1-a"
-          environment = "poc"
-          db_password = "${{ secrets.DB_PASSWORD }}"
-          db_name = "janmat"
-          db_user = "janmat_user"
+          project_id       = "${{ secrets.GCP_PROJECT_ID }}"
+          region           = "asia-south1"
+          zone             = "asia-south1-a"
+          environment      = "poc"
+          db_password      = "${{ secrets.DB_PASSWORD }}"
+          db_name          = "janmat"
+          db_user          = "janmat_user"
           db_stop_schedule = "30 17 * * *"
           db_start_schedule = "30 1 * * *"
-          gemini_model = "gemini-2.5-flash-lite"
-          constituency_id = "KA-BLR-NORTH-01"
+          gemini_model     = "gemini-2.5-flash-lite"
+          constituency_id  = "KA-BLR-NORTH-01"
           EOF
-          terraform fmt terraform.tfvars
 
-      - name: terraform init
+      - name: Terraform Init
         run: terraform init -upgrade
 
-      # ── Import existing resources into state (|| true = skip if already
-      #    imported or resource doesn't exist — never halts provisioning) ──
-      - name: Import existing GCP resources into Terraform state
-        run: |
-          P="${{ secrets.GCP_PROJECT_ID }}"
-
-          import() {
-            terraform import "$1" "$2" 2>&1 | grep -v "already managed\|Import successful" || true
-          }
-
-          echo "=== BigQuery ==="
-          import google_bigquery_dataset.analytics      "$P/janmat_analytics"
-          import google_bigquery_dataset.infrastructure "$P/janmat_infrastructure"
-
-          echo "=== Secret Manager ==="
-          import google_secret_manager_secret.db_url              "projects/$P/secrets/janmat-db-url"
-          import google_secret_manager_secret.maps_api_key        "projects/$P/secrets/janmat-maps-api-key"
-          import google_secret_manager_secret.gemini_api_key      "projects/$P/secrets/janmat-gemini-api-key"
-          import google_secret_manager_secret.jwt_secret          "projects/$P/secrets/janmat-jwt-secret"
-          import google_secret_manager_secret.google_client_id    "projects/$P/secrets/janmat-google-client-id"
-          import google_secret_manager_secret.google_client_secret "projects/$P/secrets/janmat-google-client-secret"
-          import google_secret_manager_secret.session_secret      "projects/$P/secrets/janmat-session-secret"
-
-          echo "=== GCS Buckets ==="
-          import google_storage_bucket.media   "janmat-media-$P"
-          import google_storage_bucket.tfplans "janmat-tfplans-$P"
-          import google_storage_bucket.logs    "janmat-logs-$P"
-          import google_storage_bucket.exports "janmat-exports-$P"
-
-          echo "=== Service Accounts ==="
-          import google_service_account.backend   "projects/$P/serviceAccounts/janmat-backend@$P.iam.gserviceaccount.com"
-          import google_service_account.scheduler "projects/$P/serviceAccounts/janmat-scheduler@$P.iam.gserviceaccount.com"
-          import google_service_account.github_ci "projects/$P/serviceAccounts/janmat-github-ci@$P.iam.gserviceaccount.com"
-
-          echo "=== Networking ==="
-          import google_compute_network.janmat_vpc "projects/$P/global/networks/janmat-vpc"
-
-          echo "=== Pub/Sub ==="
-          import google_pubsub_topic.grievance_submitted "projects/$P/topics/grievance-submitted"
-          import google_pubsub_topic.processing_complete "projects/$P/topics/processing-complete"
-          import google_pubsub_topic.priority_updated    "projects/$P/topics/priority-updated"
-          import google_pubsub_topic.grievance_dlq       "projects/$P/topics/grievance-dlq"
-
-          echo "=== Done — any 'already managed' messages above are normal ==="
-
-      - name: terraform fmt check
-        run: |
-          find . -name "*.tf" -exec terraform fmt -check {} +
-
-      - name: terraform validate
+      - name: Terraform Validate
         run: terraform validate
 
-      # ── PLAN (PR only) — save plan to GCS for apply step ──────────
-      - name: terraform plan
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+      - name: Terraform Plan
         id: plan
-        run: |
-          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        run: terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
         continue-on-error: true
 
-      - name: Upload plan to GCS
+      - name: Save plan to GCS (PR only)
         if: github.event_name == 'pull_request' && steps.plan.outcome == 'success'
         run: |
-          # Ensure bucket exists
-          gcloud storage buckets create gs://${{ env.GCS_PLAN_BUCKET }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --location=asia-south1 2>/dev/null || true
-          # Upload plan keyed by PR SHA
           gcloud storage cp tfplan \
             gs://${{ env.GCS_PLAN_BUCKET }}/pr-${{ github.event.pull_request.number }}/tfplan
 
@@ -148,39 +105,89 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## ${icon} Terraform Plan\n\`\`\`hcl\n${truncated}\n\`\`\`\n*Plan saved to GCS — apply runs automatically on merge to master.*`
+              body: `## ${icon} Terraform Plan\n\`\`\`\n${truncated}\n\`\`\`\n*Plan saved to GCS — apply runs automatically on merge to master.*`
             });
 
       - name: Fail if plan failed
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-      # ── APPLY (push to master only) — use saved plan from GCS ─────
-      - name: Find merged PR number
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        id: pr
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 2: APPLY — runs ONLY on push to master (PR merge)
+  # Uses saved plan from GCS. No import, no re-plan.
+  # ════════════════════════════════════════════════════════════════════
+  apply:
+    name: Terraform Apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Write terraform.tfvars
         run: |
+          cat > terraform.tfvars <<EOF
+          project_id       = "${{ secrets.GCP_PROJECT_ID }}"
+          region           = "asia-south1"
+          zone             = "asia-south1-a"
+          environment      = "poc"
+          db_password      = "${{ secrets.DB_PASSWORD }}"
+          db_name          = "janmat"
+          db_user          = "janmat_user"
+          db_stop_schedule = "30 17 * * *"
+          db_start_schedule = "30 1 * * *"
+          gemini_model     = "gemini-2.5-flash-lite"
+          constituency_id  = "KA-BLR-NORTH-01"
+          EOF
+
+      - name: Terraform Init
+        run: terraform init -upgrade
+
+      - name: Download saved plan from GCS
+        id: download
+        run: |
+          # Find plan saved by the PR that produced this merge commit
           PR_NUMBER=$(gh pr list --state merged --base master \
             --json number,mergeCommit \
             --jq ".[] | select(.mergeCommit.oid == \"${{ github.sha }}\") | .number" \
-            --repo ${{ github.repository }})
-          echo "number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+            --repo ${{ github.repository }} 2>/dev/null || echo "")
+          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Using saved plan from PR #${PR_NUMBER}"
+            gcloud storage cp \
+              gs://${{ env.GCS_PLAN_BUCKET }}/pr-${PR_NUMBER}/tfplan tfplan
+            echo "has_saved_plan=true" >> $GITHUB_OUTPUT
+          else
+            echo "No PR found (direct push) — will run fresh plan"
+            echo "has_saved_plan=false" >> $GITHUB_OUTPUT
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download plan from GCS
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number != ''
-        run: |
-          gcloud storage cp \
-            gs://${{ env.GCS_PLAN_BUCKET }}/pr-${{ steps.pr.outputs.number }}/tfplan \
-            tfplan
-
-      - name: terraform apply (saved plan)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number != ''
+      - name: Terraform Apply (saved plan)
+        if: steps.download.outputs.has_saved_plan == 'true'
         run: terraform apply -auto-approve tfplan
 
-      - name: terraform apply (fresh plan — direct push without PR)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.pr.outputs.number == ''
+      - name: Terraform Apply (fresh plan — direct push)
+        if: steps.download.outputs.has_saved_plan == 'false'
         run: |
           terraform plan -out=tfplan
           terraform apply -auto-approve tfplan
