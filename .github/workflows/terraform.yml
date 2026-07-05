@@ -171,10 +171,14 @@ jobs:
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
 
           if [ -n "$PR_NUMBER" ]; then
-            echo "Using saved plan from PR #${PR_NUMBER}"
-            gcloud storage cp \
-              gs://${{ env.GCS_PLAN_BUCKET }}/pr-${PR_NUMBER}/tfplan tfplan
-            echo "has_saved_plan=true" >> $GITHUB_OUTPUT
+            echo "Attempting to download plan from PR #${PR_NUMBER}"
+            if gcloud storage cp \
+              gs://${{ env.GCS_PLAN_BUCKET }}/pr-${PR_NUMBER}/tfplan tfplan 2>/dev/null; then
+              echo "has_saved_plan=true" >> $GITHUB_OUTPUT
+            else
+              echo "Saved plan not found or deleted — will run fresh plan"
+              echo "has_saved_plan=false" >> $GITHUB_OUTPUT
+            fi
           else
             echo "No PR found (direct push) — will run fresh plan"
             echo "has_saved_plan=false" >> $GITHUB_OUTPUT
@@ -183,11 +187,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Terraform Apply (saved plan)
+        id: apply_saved
         if: steps.download.outputs.has_saved_plan == 'true'
         run: terraform apply -auto-approve tfplan
+        continue-on-error: true
 
-      - name: Terraform Apply (fresh plan — direct push)
-        if: steps.download.outputs.has_saved_plan == 'false'
+      - name: Terraform Apply (fresh plan — saved plan stale or no PR)
+        if: steps.download.outputs.has_saved_plan == 'false' || steps.apply_saved.outcome == 'failure'
         run: |
+          echo "Running fresh plan (saved plan was stale or unavailable)"
           terraform plan -out=tfplan
           terraform apply -auto-approve tfplan
