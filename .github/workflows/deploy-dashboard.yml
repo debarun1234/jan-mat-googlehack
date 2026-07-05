@@ -63,6 +63,7 @@ jobs:
           DEMO_USER: "mp@janmat.demo"
           DEMO_PASS: "JanMat@2025!"
           NODE_ENV: "production"
+          GOOGLE_CALLBACK_URL: "https://janmat-dashboard-w2w3osjaua-el.a.run.app/auth/google/callback"
           EOF
 
       - name: Deploy to Cloud Run
