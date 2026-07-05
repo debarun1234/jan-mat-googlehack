@@ -7,12 +7,14 @@ on:
       - "backend/**"
       - "dashboard/**"
       - "citizen-app/**"
+      - "etl/**"
   push:
     branches: [master]
     paths:
       - "backend/**"
       - "dashboard/**"
       - "citizen-app/**"
+      - "etl/**"
 
 jobs:
   backend:
@@ -72,7 +74,32 @@ jobs:
           node-version: "22"
 
       - name: Install deps
-        run: npm install
+        run: npm ci
+
+  etl:
+    name: ETL - lint
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'etl/') ||
+      github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: etl
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check app/
+
+      - name: Format check
+        run: ruff format --check app/
 
   flutter:
     name: Flutter - analyze
