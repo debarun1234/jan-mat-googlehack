@@ -75,6 +75,4 @@ jobs:
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
           echo "Cloud SQL: $DB_STATE"
           echo "Cloud Run: min-instances=0 (scales to zero on no traffic)"
-          echo ""
-          echo "💡 To restart: run 'Morning Startup' workflow manually"
-          echo "   or push to master to redeploy (auto-starts Cloud Run)"
+          echo "Auto-restart scheduled: 1:00 PM IST (07:30 UTC)"

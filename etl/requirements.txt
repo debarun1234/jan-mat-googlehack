@@ -1,0 +1,66 @@
+# Production ETL Pipeline Dependencies
+# Python 3.12+
+
+# FastAPI and async framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-multipart==0.0.6
+
+# Google Cloud
+google-cloud-storage==2.14.0
+google-cloud-bigquery==3.13.0
+google-cloud-pubsub==2.18.4
+google-cloud-logging==3.8.0
+google-cloud-vision==3.4.4
+google-cloud-speech
+google-cloud-translate
+google-generativeai==0.3.0
+
+# API and serialization
+httpx==0.25.2
+requests==2.31.0
+
+# Data processing
+PyPDF2
+pdfplumber==0.10.3
+pillow==10.1.0
+python-magic==0.4.27
+
+# Logging and monitoring
+python-json-logger==2.0.7
+sentry-sdk==1.38.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+faker==21.0.0
+
+# Code quality
+black==23.12.0
+flake8==6.1.0
+isort==5.13.2
+mypy==1.7.1
+
+# Async and concurrency
+asyncio==3.4.3
+aiohttp==3.9.1
+
+# Utilities
+python-dotenv==1.0.0
+pytz==2023.3
+click==8.1.7
+
+# API documentation
+swagger-ui-py
+
+# Database
+SQLAlchemy==2.0.23
+psycopg2-binary==2.9.9  # For Cloud SQL PostgreSQL
+
+# Additional utilities
+retry==0.9.2
+backoff==2.2.1
