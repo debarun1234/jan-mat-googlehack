@@ -349,7 +349,7 @@ tr:last-child td{border-bottom:none}
           <div class="progress-bar"><div class="progress-fill" style="width:91.8%;background:#00695c"></div></div>
         </div>
         <div style="margin-top:16px;padding:10px;background:#f5f7ff;border-radius:8px;font-size:.8rem;color:var(--muted)">
-          Model: <strong>gemini-2.5-flash-lite</strong> · Temperature: 0.3 · Schema-enforced
+          Model: <strong>gemini-3.1-flash-lite</strong> · Temperature: 0.3 · Schema-enforced
         </div>
       </div>
     </div>
@@ -1116,23 +1116,4 @@ function chartHBar(id, labels, data, colors) {
   });
 }
 
-// ── Table sort ─────────────────────────────────────────────────────
-function sortTable(tableId, col) {
-  const tbody = document.getElementById(tableId).querySelector('tbody');
-  const rows  = Array.from(tbody.rows);
-  rows.sort((a,b)=>(a.cells[col]?.textContent||'').localeCompare(b.cells[col]?.textContent||'',undefined,{numeric:true}));
-  tbody.append(...rows);
-}
-
-// ── Color palette ──────────────────────────────────────────────────
-function palette(i) {
-  const p=['#1a237e','#1565c0','#2e7d32','#e65100','#c62828','#4a148c','#00695c','#f57f17','#37474f','#880e4f'];
-  return p[i%p.length];
-}
-
-// ── Boot ───────────────────────────────────────────────────────────
-init().then(()=>{ loadProjects(); }).catch(console.error);
-</script>
-
-</body>
-</html>
+// ── Table sort ───────────────────────�

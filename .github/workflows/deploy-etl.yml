@@ -58,7 +58,7 @@ jobs:
             PUBSUB_TOPIC_SUBMISSIONS=grievance-submitted
             PUBSUB_TOPIC_DLQ=grievance-dlq
             PUBSUB_SUBSCRIPTION=grievance-processor-sub
-            GEMINI_MODEL=gemini-2.5-flash-lite
+            GEMINI_MODEL=gemini-3.1-flash-lite
             ENVIRONMENT=production
             DEBUG=false
             API_HOST=0.0.0.0

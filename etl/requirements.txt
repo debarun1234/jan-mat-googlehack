@@ -16,7 +16,8 @@ google-cloud-logging==3.8.0
 google-cloud-vision==3.4.4
 google-cloud-speech
 google-cloud-translate
-google-generativeai==0.3.0
+google-cloud-aiplatform==1.74.0
+google-generativeai==0.8.3
 
 # API and serialization
 httpx==0.25.2

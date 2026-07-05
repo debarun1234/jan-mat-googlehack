@@ -1,6 +1,11 @@
 """
 Gemini API client for structured AI inference.
 Implements retry logic, schema validation, and streaming.
+
+Authentication strategy (in priority order):
+  1. GEMINI_API_KEY env var → uses google.generativeai (AI Studio endpoint)
+  2. No key → uses Vertex AI SDK with Application Default Credentials
+     (Cloud Run service account must have roles/aiplatform.user)
 """
 
 import json
@@ -9,7 +14,6 @@ import asyncio
 from typing import Dict, Any, Optional
 import time
 
-import google.generativeai as genai
 from google.api_core import retry, exceptions
 
 from app.config.settings import get_settings
@@ -24,8 +28,29 @@ class GeminiClient:
 
     def __init__(self):
         self.settings = get_settings()
-        genai.configure(api_key=self.settings.ai.gemini_api_key)
-        self.model = genai.GenerativeModel(self.settings.ai.gemini_model)
+        self._use_vertex = not bool(self.settings.ai.gemini_api_key)
+
+        if self._use_vertex:
+            # Vertex AI — uses Cloud Run service account (ADC), no key needed
+            import vertexai
+            from vertexai.generative_models import GenerativeModel
+
+            logger.info(
+                "GEMINI_API_KEY not set — using Vertex AI SDK with ADC "
+                f"(project={self.settings.cloud.gcp_project_id}, "
+                f"location={self.settings.cloud.gcp_region})"
+            )
+            vertexai.init(
+                project=self.settings.cloud.gcp_project_id,
+                location="global",
+            )
+            self.model = GenerativeModel(self.settings.ai.gemini_model)
+        else:
+            # AI Studio / Gemini API — uses explicit API key
+            import google.generativeai as genai
+
+            genai.configure(api_key=self.settings.ai.gemini_api_key)
+            self.model = genai.GenerativeModel(self.settings.ai.gemini_model)
         self.call_count = 0
         self.error_count = 0
 

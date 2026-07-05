@@ -106,7 +106,7 @@ class AISettings(BaseSettings):
     )
 
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.1-flash-lite", alias="GEMINI_MODEL")
     gemini_temperature: float = Field(default=0.3, alias="GEMINI_TEMPERATURE")
     gemini_max_tokens: int = Field(default=1024, alias="GEMINI_MAX_TOKENS")
     ai_timeout_seconds: int = Field(default=30, alias="AI_TIMEOUT_SECONDS")
@@ -206,7 +206,11 @@ def validate_settings() -> bool:
             ):
                 raise ValueError("GCS_BUCKET not configured for production")
             if not settings.ai.gemini_api_key:
-                raise ValueError("GEMINI_API_KEY not configured for production")
+                logger.warning(
+                    "GEMINI_API_KEY is not set — GeminiClient will use "
+                    "Application Default Credentials (Vertex AI SA auth). "
+                    "Ensure the Cloud Run service account has roles/aiplatform.user."
+                )
 
         # Validate numeric ranges
         if not (0.0 <= settings.ai.gemini_temperature <= 1.0):
