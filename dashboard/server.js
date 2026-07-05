@@ -34,15 +34,10 @@ app.use(cookieSession({
   sameSite: "lax",
 }));
 
-// Passport compatibility shim for cookie-session (passport expects regenerate/save on session)
-app.use((req, _res, next) => {
-  if (req.session && !req.session.regenerate) req.session.regenerate = (cb) => { cb(); };
-  if (req.session && !req.session.save)       req.session.save       = (cb) => { cb(); };
-  next();
-});
-
+// Only passport.initialize() — we do NOT use passport.session().
+// Passport 0.7 session manager is incompatible with cookie-session (no-op shim is unreliable).
+// Instead we manually persist req.user → req.session.user after OAuth callback.
 app.use(passport.initialize());
-app.use(passport.session());
 
 // ── Passport Google OAuth 2.0 ─────────────────────────────────────────
 passport.use(new GoogleStrategy({
@@ -64,17 +59,19 @@ passport.use(new GoogleStrategy({
   });
 }));
 
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => done(null, user));
-
 // ── Auth middleware ───────────────────────────────────────────────────
+// User is stored directly in cookie-session as req.session.user (not via passport.session).
 function requireAuth(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  const user = req.session?.user;
+  if (user) {
+    req.user = user; // restore for getMPUser()
+    return next();
+  }
   res.redirect("/login");
 }
 
 function getMPUser(req) {
-  return req.user || null;
+  return req.session?.user || req.user || null;
 }
 
 // ── Auth Routes ───────────────────────────────────────────────────────
@@ -87,9 +84,12 @@ app.get("/auth/google",
 );
 
 // Google OAuth — callback: get backend JWT using real user identity
+// session: false → skip passport.session() manager; we persist manually below.
 app.get("/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login?error=unauthorized" }),
+  passport.authenticate("google", { session: false, failureRedirect: "/login?error=unauthorized" }),
   async (req, res) => {
+    // Manually store user in cookie-session (bypasses passport.session() compat issues)
+    req.session.user = req.user;
     try {
       const { data } = await axios.post(`${API}/dashboard/auth/google-login`, {
         email:       req.user.email,
@@ -106,8 +106,7 @@ app.get("/auth/google/callback",
 );
 
 app.get("/auth/logout", (req, res) => {
-  req.logout(() => {});
-  req.session.destroy();
+  req.session = null; // clears cookie-session cookie
   res.redirect("/login");
 });
 
