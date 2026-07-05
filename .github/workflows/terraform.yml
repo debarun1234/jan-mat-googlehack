@@ -63,6 +63,51 @@ jobs:
       - name: terraform init
         run: terraform init -upgrade
 
+      # ── Import existing resources into state (|| true = skip if already
+      #    imported or resource doesn't exist — never halts provisioning) ──
+      - name: Import existing GCP resources into Terraform state
+        run: |
+          P="${{ secrets.GCP_PROJECT_ID }}"
+
+          import() {
+            terraform import "$1" "$2" 2>&1 | grep -v "already managed\|Import successful" || true
+          }
+
+          echo "=== BigQuery ==="
+          import google_bigquery_dataset.analytics      "$P/janmat_analytics"
+          import google_bigquery_dataset.infrastructure "$P/janmat_infrastructure"
+
+          echo "=== Secret Manager ==="
+          import google_secret_manager_secret.db_url              "projects/$P/secrets/janmat-db-url"
+          import google_secret_manager_secret.maps_api_key        "projects/$P/secrets/janmat-maps-api-key"
+          import google_secret_manager_secret.gemini_api_key      "projects/$P/secrets/janmat-gemini-api-key"
+          import google_secret_manager_secret.jwt_secret          "projects/$P/secrets/janmat-jwt-secret"
+          import google_secret_manager_secret.google_client_id    "projects/$P/secrets/janmat-google-client-id"
+          import google_secret_manager_secret.google_client_secret "projects/$P/secrets/janmat-google-client-secret"
+          import google_secret_manager_secret.session_secret      "projects/$P/secrets/janmat-session-secret"
+
+          echo "=== GCS Buckets ==="
+          import google_storage_bucket.media   "janmat-media-$P"
+          import google_storage_bucket.tfplans "janmat-tfplans-$P"
+          import google_storage_bucket.logs    "janmat-logs-$P"
+          import google_storage_bucket.exports "janmat-exports-$P"
+
+          echo "=== Service Accounts ==="
+          import google_service_account.backend   "projects/$P/serviceAccounts/janmat-backend@$P.iam.gserviceaccount.com"
+          import google_service_account.scheduler "projects/$P/serviceAccounts/janmat-scheduler@$P.iam.gserviceaccount.com"
+          import google_service_account.github_ci "projects/$P/serviceAccounts/janmat-github-ci@$P.iam.gserviceaccount.com"
+
+          echo "=== Networking ==="
+          import google_compute_network.janmat_vpc "projects/$P/global/networks/janmat-vpc"
+
+          echo "=== Pub/Sub ==="
+          import google_pubsub_topic.grievance_submitted "projects/$P/topics/grievance-submitted"
+          import google_pubsub_topic.processing_complete "projects/$P/topics/processing-complete"
+          import google_pubsub_topic.priority_updated    "projects/$P/topics/priority-updated"
+          import google_pubsub_topic.grievance_dlq       "projects/$P/topics/grievance-dlq"
+
+          echo "=== Done — any 'already managed' messages above are normal ==="
+
       - name: terraform fmt check
         run: |
           find . -name "*.tf" -exec terraform fmt -check {} +

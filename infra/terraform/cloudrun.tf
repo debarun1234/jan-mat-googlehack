@@ -155,11 +155,137 @@ resource "google_cloud_run_v2_service" "backend" {
   }
 }
 
-# Allow public (unauthenticated) access to Cloud Run service
+# Allow public (unauthenticated) access to backend Cloud Run service
 resource "google_cloud_run_v2_service_iam_member" "public_access" {
   project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_service.backend.name
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# ─────────────────────────────────────────
+# Cloud Run — MP Dashboard (Node.js)
+# ─────────────────────────────────────────
+resource "google_cloud_run_v2_service" "dashboard" {
+  name     = "janmat-dashboard"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    service_account = google_service_account.backend.email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 2
+    }
+
+    containers {
+      image = "us-docker.pkg.dev/cloudrun/container/hello:latest"
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "256Mi"
+        }
+        cpu_idle = true
+      }
+
+      ports {
+        container_port = 8080
+      }
+
+      # Backend URL — hardcoded so dashboard always hits production API
+      env {
+        name  = "JANMAT_API_URL"
+        value = "https://janmat-backend-w2w3osjaua-el.a.run.app"
+      }
+      env {
+        name  = "ALLOWED_MP_EMAILS"
+        value = "quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo"
+      }
+      env {
+        name  = "DEMO_USER"
+        value = "mp@janmat.demo"
+      }
+      env {
+        name  = "DEMO_PASS"
+        value = "JanMat@2025!"
+      }
+      env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      # Secrets
+      env {
+        name = "SESSION_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.session_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GOOGLE_CLIENT_ID"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_id.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GOOGLE_CLIENT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+      # GOOGLE_CALLBACK_URL is set via gcloud after first deploy (URL known then)
+    }
+  }
+
+  depends_on = [
+    google_project_service.apis,
+    google_service_account.backend,
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+      template[0].containers[0].env,
+    ]
+  }
+}
+
+# Allow public access to dashboard
+resource "google_cloud_run_v2_service_iam_member" "dashboard_public_access" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.dashboard.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# Grant dashboard service account access to its secrets
+resource "google_secret_manager_secret_iam_member" "dashboard_session_secret" {
+  secret_id = google_secret_manager_secret.session_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.backend.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "dashboard_google_client_id" {
+  secret_id = google_secret_manager_secret.google_client_id.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.backend.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "dashboard_google_client_secret" {
+  secret_id = google_secret_manager_secret.google_client_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.backend.email}"
 }

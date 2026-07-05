@@ -1,0 +1,89 @@
+name: Deploy Dashboard to Cloud Run
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "dashboard/**"
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-south1
+  SERVICE: janmat-dashboard
+  IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/janmat-dashboard
+
+jobs:
+  deploy:
+    name: Build & Deploy Dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure session secret has a value
+        run: |
+          COUNT=$(gcloud secrets versions list janmat-session-secret \
+            --project=$PROJECT_ID --format="value(name)" 2>/dev/null | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Generating session secret..."
+            openssl rand -hex 32 | \
+              gcloud secrets versions add janmat-session-secret \
+                --data-file=- --project=$PROJECT_ID
+            echo "✅ Session secret populated"
+          else
+            echo "ℹ️  Session secret already set (versions: $COUNT)"
+          fi
+
+      - name: Build & push image
+        run: |
+          gcloud builds submit dashboard/ \
+            --tag "$IMAGE:$GITHUB_SHA" \
+            --project "$PROJECT_ID" \
+            --timeout 600s
+          gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}:${{ github.sha }}
+          project_id: ${{ env.PROJECT_ID }}
+          flags: >-
+            --min-instances=0
+            --max-instances=2
+            --memory=256Mi
+            --cpu=1
+            --timeout=60
+            --set-env-vars=JANMAT_API_URL=https://janmat-backend-w2w3osjaua-el.a.run.app
+            --set-env-vars=ALLOWED_MP_EMAILS=quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo
+            --set-env-vars=DEMO_USER=mp@janmat.demo
+            --set-env-vars=DEMO_PASS=JanMat@2025!
+            --set-env-vars=NODE_ENV=production
+            --set-secrets=SESSION_SECRET=janmat-session-secret:latest
+            --set-secrets=GOOGLE_CLIENT_ID=janmat-google-client-id:latest
+            --set-secrets=GOOGLE_CLIENT_SECRET=janmat-google-client-secret:latest
+
+      - name: Print dashboard URL
+        run: |
+          echo "✅ Dashboard deployed: ${{ steps.deploy.outputs.url }}"
+          echo ""
+          echo "Next step: add this to Google OAuth console (Authorized redirect URIs):"
+          echo "  ${{ steps.deploy.outputs.url }}/auth/google/callback"
+          echo ""
+          echo "Then update GOOGLE_CALLBACK_URL:"
+          echo "  gcloud run services update janmat-dashboard --region=$REGION \\"
+          echo "    --update-env-vars=GOOGLE_CALLBACK_URL=${{ steps.deploy.outputs.url }}/auth/google/callback \\"
+          echo "    --project=$PROJECT_ID"
