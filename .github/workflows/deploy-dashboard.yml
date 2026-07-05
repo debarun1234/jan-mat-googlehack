@@ -53,19 +53,6 @@ jobs:
             --timeout 600s
           gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
 
-      # Use env-vars-file to avoid comma conflicts in ALLOWED_MP_EMAILS
-      - name: Write env vars file
-        run: |
-          cat > /tmp/dashboard-env.yaml << 'EOF'
-          JANMAT_API_URL: "https://janmat-backend-w2w3osjaua-el.a.run.app"
-          JANMAT_ETL_URL: "https://janmat-etl-w2w3osjaua-el.a.run.app"
-          ALLOWED_MP_EMAILS: "*"
-          DEMO_USER: "mp@janmat.demo"
-          DEMO_PASS: "JanMat@2025!"
-          NODE_ENV: "production"
-          GOOGLE_CALLBACK_URL: "https://janmat-dashboard-w2w3osjaua-el.a.run.app/auth/google/callback"
-          EOF
-
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
@@ -74,7 +61,13 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
-          env_vars_file: /tmp/dashboard-env.yaml
+          env_vars: |
+            JANMAT_API_URL=https://janmat-backend-w2w3osjaua-el.a.run.app
+            JANMAT_ETL_URL=https://janmat-etl-w2w3osjaua-el.a.run.app
+            ALLOWED_MP_EMAILS=*
+            NODE_ENV=production
+            GOOGLE_CALLBACK_URL=https://janmat-dashboard-w2w3osjaua-el.a.run.app/auth/google/callback
+            JANMAT_DASHBOARD_KEY=JanMat-Dashboard-2025
           secrets: |
             SESSION_SECRET=janmat-session-secret:latest
             GOOGLE_CLIENT_ID=janmat-google-client-id:latest
