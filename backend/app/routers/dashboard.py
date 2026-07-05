@@ -28,13 +28,8 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/dashboard/auth/login")
 
-# ── Demo MP credentials (replace with Cloud SQL lookup in production) ──
-DEMO_MP = {
-    "username": "mp@janmat.demo",
-    "password": "JanMat@2025!",  # Override via Secret Manager in prod
-    "name": "Demo MP",
-    "constituency_id": "KA-BLR-NORTH-01",
-}
+# Default constituency for POC — one MP, one constituency
+DEFAULT_CONSTITUENCY = "KA-BLR-NORTH-01"
 
 
 # ── Auth ──────────────────────────────────────────────────────────────
@@ -46,6 +41,14 @@ class TokenResponse(BaseModel):
     expires_in: int
     mp_name: str
     constituency_id: str
+
+
+class GoogleLoginRequest(BaseModel):
+    """Called by the Node.js dashboard server after Google OAuth verification."""
+    email: str
+    name: str
+    service_key: str
+    constituency_id: str = DEFAULT_CONSTITUENCY
 
 
 def _create_jwt(data: dict, settings: Settings) -> str:
@@ -74,16 +77,49 @@ async def _get_current_mp(
         ) from exc
 
 
+@router.post("/auth/google-login", response_model=TokenResponse)
+async def google_login(
+    body: GoogleLoginRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """
+    Issues a backend JWT for a Google-authenticated MP.
+    Called server-to-server by the Node.js dashboard after Google OAuth.
+    The service_key prevents arbitrary clients from minting tokens.
+    """
+    if body.service_key != settings.janmat_dashboard_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service key",
+        )
+
+    token = _create_jwt(
+        {
+            "sub": body.email,
+            "name": body.name,
+            "constituency_id": body.constituency_id,
+        },
+        settings,
+    )
+    log.info("mp_google_login", email=body.email, name=body.name)
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.jwt_expire_minutes * 60,
+        mp_name=body.name,
+        constituency_id=body.constituency_id,
+    )
+
+
 @router.post("/auth/login", response_model=TokenResponse)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    """JWT login for MP. Returns bearer token."""
-    if (
-        form_data.username != DEMO_MP["username"]
-        or form_data.password != DEMO_MP["password"]
-    ):
+    """
+    Legacy form-based login — kept for local dev / curl testing.
+    Accepts service_key as password field.
+    """
+    if form_data.password != settings.janmat_dashboard_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -91,9 +127,9 @@ async def login(
 
     token = _create_jwt(
         {
-            "sub": DEMO_MP["username"],
-            "name": DEMO_MP["name"],
-            "constituency_id": DEMO_MP["constituency_id"],
+            "sub": form_data.username,
+            "name": form_data.username,
+            "constituency_id": DEFAULT_CONSTITUENCY,
         },
         settings,
     )
@@ -101,8 +137,8 @@ async def login(
     return TokenResponse(
         access_token=token,
         expires_in=settings.jwt_expire_minutes * 60,
-        mp_name=DEMO_MP["name"],
-        constituency_id=DEMO_MP["constituency_id"],
+        mp_name=form_data.username,
+        constituency_id=DEFAULT_CONSTITUENCY,
     )
 
 

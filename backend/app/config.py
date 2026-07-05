@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480  # 8 hours
+    # Shared key between dashboard (Node.js) and backend to authenticate
+    # service-to-service JWT issuance. Override via JANMAT_DASHBOARD_KEY env var.
+    janmat_dashboard_key: str = "JanMat-Dashboard-2025"
 
     # ETL service — backend can forward submissions for deeper processing
     janmat_etl_url: str = ""  # e.g. https://janmat-etl-xxx.a.run.app

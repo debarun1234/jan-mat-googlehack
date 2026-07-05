@@ -19,42 +19,24 @@
     .logo .emblem{font-size:3rem;margin-bottom:8px}
     .logo h1{font-size:2rem;font-weight:900;color:#1a237e;letter-spacing:-1px}
     .logo p{font-size:.82rem;color:#5c6bc0;margin-top:4px;font-weight:500}
-    .divider{
-      display:flex;align-items:center;gap:12px;margin:24px 0;
-      color:#90a4ae;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px
-    }
-    .divider::before,.divider::after{content:'';flex:1;height:1px;background:#e0e0e0}
     .btn-google{
       width:100%;padding:14px;display:flex;align-items:center;justify-content:center;gap:12px;
       border:2px solid #e0e0e0;border-radius:10px;background:#fff;cursor:pointer;
-      font-size:1rem;font-weight:700;color:#212121;transition:all .2s;text-decoration:none
+      font-size:1rem;font-weight:700;color:#212121;transition:all .2s;text-decoration:none;
+      margin-top:8px;
     }
     .btn-google:hover{border-color:#4285f4;background:#f5f8ff;box-shadow:0 4px 16px rgba(66,133,244,.15)}
-    .btn-google svg{width:22px;height:22px}
-    label{display:block;font-size:.75rem;font-weight:700;color:#455a64;margin-bottom:6px;
-          text-transform:uppercase;letter-spacing:.5px}
-    input{
-      width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;
-      font-size:.95rem;margin-bottom:16px;outline:none;transition:border-color .2s
-    }
-    input:focus{border-color:#3f51b5}
-    .btn-submit{
-      width:100%;padding:14px;background:#1a237e;color:#fff;border:none;
-      border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s
-    }
-    .btn-submit:hover{background:#283593}
+    .btn-google svg{width:22px;height:22px;flex-shrink:0}
     .error{
       background:#ffebee;color:#c62828;padding:12px 16px;border-radius:8px;
       font-size:.85rem;margin-bottom:20px;border-left:3px solid #c62828
     }
-    .demo-hint{
-      text-align:center;margin-top:20px;font-size:.78rem;color:#90a4ae;
-      background:#f5f5f5;padding:10px 16px;border-radius:8px;
-    }
-    .demo-hint code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:.8rem}
     .badge{
       display:inline-block;background:#e8f5e9;color:#2e7d32;
-      padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:700;margin-bottom:24px
+      padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:700;margin-bottom:28px
+    }
+    .note{
+      text-align:center;margin-top:24px;font-size:.78rem;color:#90a4ae;line-height:1.5;
     }
   </style>
 </head>
@@ -69,7 +51,6 @@
 
   <div id="error-msg" class="error" style="display:none"></div>
 
-  <!-- Google OAuth -->
   <a href="/auth/google" class="btn-google">
     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -80,25 +61,14 @@
     Sign in with Google
   </a>
 
-  <div class="divider">or demo access</div>
-
-  <form method="POST" action="/auth/login">
-    <label>Email</label>
-    <input type="email" name="username" placeholder="mp@janmat.demo" autocomplete="username">
-    <label>Password</label>
-    <input type="password" name="password" placeholder="••••••••" autocomplete="current-password">
-    <button type="submit" class="btn-submit">Sign In</button>
-  </form>
-
-  <div class="demo-hint">
-    Demo: <code>mp@janmat.demo</code> / <code>JanMat@2025!</code>
-  </div>
+  <div class="note">Access is restricted to authorized Members of Parliament.</div>
 </div>
 <script>
   const p = new URLSearchParams(location.search);
   if (p.get('error')) {
     const el = document.getElementById('error-msg');
-    el.textContent = decodeURIComponent(p.get('error'));
+    const msgs = { unauthorized: 'Your account is not authorized. Contact the JanMat administrator.' };
+    el.textContent = msgs[p.get('error')] || decodeURIComponent(p.get('error'));
     el.style.display = 'block';
   }
 </script>

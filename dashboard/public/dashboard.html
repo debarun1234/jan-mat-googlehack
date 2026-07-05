@@ -1116,4 +1116,26 @@ function chartHBar(id, labels, data, colors) {
   });
 }
 
-// ── Table sort ───────────────────────�
+// ── Table sort ──────────────────────────────────────────────────
+let _sortDir = {};
+function sortTable(tableId, col) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const tbody = table.querySelector('tbody') || table;
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  _sortDir[col] = !_sortDir[col];
+  rows.sort((a, b) => {
+    const av = a.cells[col]?.textContent.trim() || '';
+    const bv = b.cells[col]?.textContent.trim() || '';
+    const an = parseFloat(av), bn = parseFloat(bv);
+    const cmp = isNaN(an) ? av.localeCompare(bv) : an - bn;
+    return _sortDir[col] ? cmp : -cmp;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+// ── Boot ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
