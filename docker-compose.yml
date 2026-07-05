@@ -48,9 +48,9 @@ services:
       - ALLOWED_MP_EMAILS=quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo
       - DEMO_USER=mp@janmat.demo
       - DEMO_PASS=JanMat@2025!
-      # Google OAuth — leave blank for demo mode (login bypassed)
-      - GOOGLE_CLIENT_ID=
-      - GOOGLE_CLIENT_SECRET=
+      # Google OAuth — set in .env file (see .env.example)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
     depends_on:
       - backend
