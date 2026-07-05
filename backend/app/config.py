@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     gcp_region: str = "asia-south1"
 
     # Gemini / Vertex AI
-    gemini_model: str = "gemini-2.5-flash-lite"
+    gemini_model: str = "gemini-3.1-flash-lite"
 
     # Cloud SQL (injected as DATABASE_URL from Secret Manager)
     database_url: str  # postgresql+asyncpg://user:pass@host/db

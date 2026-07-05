@@ -379,6 +379,15 @@ resource "google_cloud_run_v2_service" "etl" {
         name  = "DEBUG"
         value = "false"
       }
+      env {
+        name = "GEMINI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.gemini_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
     }
   }
 
@@ -390,6 +399,7 @@ resource "google_cloud_run_v2_service" "etl" {
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].containers[0].env,
     ]
   }
 }

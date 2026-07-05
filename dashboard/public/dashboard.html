@@ -349,7 +349,7 @@ tr:last-child td{border-bottom:none}
           <div class="progress-bar"><div class="progress-fill" style="width:91.8%;background:#00695c"></div></div>
         </div>
         <div style="margin-top:16px;padding:10px;background:#f5f7ff;border-radius:8px;font-size:.8rem;color:var(--muted)">
-          Model: <strong>gemini-2.5-flash-lite</strong> · Temperature: 0.0 · Schema-enforced
+          Model: <strong>gemini-2.5-flash-lite</strong> · Temperature: 0.3 · Schema-enforced
         </div>
       </div>
     </div>
@@ -823,14 +823,18 @@ async function loadHealthGrid() {
   try {
     const h = await (await fetch('/api/telemetry/health')).json();
     const dot = document.getElementById('health-dot');
-    dot.style.background = h.api_status==='healthy'?'#4caf50':'#ef5350';
+    const allOk = h.api_status==='healthy' && (h.etl_status==='healthy'||h.etl_status==='not_configured');
+    dot.style.background = allOk?'#4caf50':'#ef5350';
+    dot.title = allOk ? 'All systems healthy' : 'Some services degraded';
     document.getElementById('health-updated').textContent = 'Checked: '+new Date(h.checked_at).toLocaleTimeString();
-    document.getElementById('health-grid').innerHTML = [
-      {label:'Backend API',value:h.api_status,ok:h.api_status==='healthy'},
-      {label:'BigQuery',value:h.bigquery,ok:h.bigquery==='active'},
-      {label:'Cloud Run',value:h.cloud_run,ok:h.cloud_run==='active'},
-      {label:'Pub/Sub',value:'active',ok:true},
-    ].map(item=>`
+    const items = [
+      {label:'Backend API',     value:h.api_status,  ok:h.api_status==='healthy'},
+      {label:'ETL Pipeline',    value:h.etl_status,  ok:h.etl_status==='healthy'||h.etl_status==='not_configured'},
+      {label:'BigQuery',        value:h.bigquery,    ok:h.bigquery==='active'},
+      {label:'Cloud Run',       value:h.cloud_run,   ok:h.cloud_run==='active'},
+      {label:'Pub/Sub',         value:'active',      ok:true},
+    ];
+    document.getElementById('health-grid').innerHTML = items.map(item=>`
       <div style="padding:16px;border-radius:10px;background:${item.ok?'#e8f5e9':'#ffebee'}">
         <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase">${item.label}</div>
         <div style="font-size:1rem;font-weight:800;color:${item.ok?'#2e7d32':'#c62828'};margin-top:4px">
@@ -838,6 +842,12 @@ async function loadHealthGrid() {
         </div>
       </div>
     `).join('');
+
+    // Also load ETL submission counts into the telemetry KPI
+    fetch('/api/etl/stats').then(r=>r.json()).then(s=>{
+      const el = document.getElementById('t-evidence');
+      if(el && s.total_submissions!=null) el.textContent = s.total_submissions.toLocaleString();
+    }).catch(()=>{});
   } catch(e){
     document.getElementById('health-grid').innerHTML = '<span style="color:var(--muted)">Could not check health</span>';
   }
@@ -1048,12 +1058,19 @@ async function dbControl(action) {
 // ── Pipeline ───────────────────────────────────────────────────────
 async function runPipeline() {
   const msg = document.getElementById('pipeline-msg');
-  if(msg) msg.textContent = '⏳ Running full pipeline...';
+  if(msg) msg.textContent = '⏳ Running pipeline: cluster → score → evidence...';
   notify('⏳ Running priority analysis pipeline...','');
   try {
-    await fetch('/api/pipeline/run',{method:'POST'});
-    notify('✅ Pipeline complete! Refreshing data...','success');
-    if(msg) msg.textContent = '✅ Completed at '+new Date().toLocaleTimeString();
+    const res = await fetch('/api/pipeline/run',{method:'POST'});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||'Pipeline failed');
+    // Build step summary
+    const stepSummary = (data.steps||[]).map(s=>{
+      const icon = s.status==='ok'?'✅':s.status==='skipped'?'⚠️':'❌';
+      return `${icon} ${s.step}`;
+    }).join(' → ');
+    notify(`✅ Pipeline complete! ${stepSummary}`,'success');
+    if(msg) msg.textContent = `✅ Completed at ${new Date().toLocaleTimeString()} · ${stepSummary}`;
     await loadOverview();
     loadProjects();
   } catch(e) { notify('❌ Pipeline error: '+e.message,'error'); if(msg) msg.textContent='❌ Error: '+e.message; }

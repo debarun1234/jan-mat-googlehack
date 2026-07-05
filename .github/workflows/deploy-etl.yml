@@ -71,6 +71,7 @@ ENVEOF
           project_id: ${{ env.PROJECT_ID }}
           env_vars_file: /tmp/etl-env.yaml
           port: 8000
+          secrets: GEMINI_API_KEY=janmat-gemini-api-key:latest
           flags: >-
             --min-instances=0
             --max-instances=3

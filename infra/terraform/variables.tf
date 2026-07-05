@@ -55,7 +55,7 @@ variable "db_start_schedule" {
 variable "gemini_model" {
   description = "Vertex AI Gemini model to use (flash = cheapest)"
   type        = string
-  default     = "gemini-2.5-flash-lite"
+  default     = "gemini-3.1-flash-lite"
 }
 
 variable "maps_api_key_secret" {

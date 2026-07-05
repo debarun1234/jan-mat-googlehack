@@ -10,6 +10,7 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API = process.env.JANMAT_API_URL || "http://localhost:8080";
+const ETL = process.env.JANMAT_ETL_URL || "";
 const ALLOWED_EMAILS_RAW = process.env.ALLOWED_MP_EMAILS || "mp@janmat.demo,quantumduobuilder@gmail.com";
 const ALLOW_ALL_EMAILS = ALLOWED_EMAILS_RAW.trim() === "*";
 const ALLOWED_EMAILS = ALLOW_ALL_EMAILS ? [] : ALLOWED_EMAILS_RAW.split(",").map(e => e.trim().toLowerCase());
@@ -197,19 +198,44 @@ apiRoute("get", "/api/telemetry/input-types", async (req) => {
   ]};
 });
 
-// System health metrics
+// System health metrics — checks both backend and ETL
 apiRoute("get", "/api/telemetry/health", async (req) => {
+  const [backendHealth, etlHealth] = await Promise.allSettled([
+    proxyGet(req, "/health"),
+    ETL ? axios.get(`${ETL}/health`, { timeout: 5000 }).then(r => r.data) : Promise.resolve(null),
+  ]);
+  const apiOk = backendHealth.status === "fulfilled" && backendHealth.value?.status;
+  const etlOk = etlHealth.status === "fulfilled" && etlHealth.value?.status === "healthy";
+  return {
+    api_status:  apiOk  ? "healthy" : "degraded",
+    etl_status:  ETL ? (etlOk ? "healthy" : "degraded") : "not_configured",
+    api_url:     API,
+    etl_url:     ETL || null,
+    checked_at:  new Date().toISOString(),
+    cloud_run:   "active",
+    bigquery:    "active",
+  };
+});
+
+// ETL pipeline stats — submission counts by category from BigQuery (via ETL)
+apiRoute("get", "/api/etl/stats", async (req) => {
+  if (!ETL) return { total_submissions: 0, by_category: [], error: "ETL not configured" };
   try {
-    const health = await proxyGet(req, "/health");
-    return {
-      api_status: health.status === "ok" ? "healthy" : "degraded",
-      api_url: API,
-      checked_at: new Date().toISOString(),
-      cloud_run: "active",
-      bigquery: "active",
-    };
-  } catch {
-    return { api_status: "unreachable", api_url: API, checked_at: new Date().toISOString() };
+    const { data } = await axios.get(`${ETL}/api/v1/pipeline/stats`, { timeout: 15000 });
+    return data;
+  } catch (e) {
+    return { total_submissions: 0, by_category: [], error: e.message };
+  }
+});
+
+// ETL health probe
+apiRoute("get", "/api/etl/health", async (_req) => {
+  if (!ETL) return { status: "not_configured" };
+  try {
+    const { data } = await axios.get(`${ETL}/health`, { timeout: 5000 });
+    return data;
+  } catch (e) {
+    return { status: "unreachable", error: e.message };
   }
 });
 
@@ -249,14 +275,32 @@ app.post("/api/db/start", requireAuth, async (req, res) => {
 
 // ── Pipeline control ──────────────────────────────────────────────────
 
+// Run the full analytics pipeline:
+//   1. Cluster  — group citizen grievances into geographic demand hotspots
+//   2. Score    — compute priority scores (P = 0.6×Demand + 0.4×Gap)
+//   3. Evidence — generate Gemini Evidence Logs for top-ranked projects
+// The ETL service runs independently (triggered by Pub/Sub) and is not called here.
 app.post("/api/pipeline/run", requireAuth, async (req, res) => {
   const constituency_id = getMPUser(req)?.constituency_id || "KA-BLR-NORTH-01";
+  const steps = [];
   try {
-    await proxyPost(req, "/analytics/cluster", { constituency_id });
-    await proxyPost(req, "/analytics/score",   { constituency_id });
-    res.json({ status: "success", constituency_id, ran_at: new Date().toISOString() });
+    const clusterResult = await proxyPost(req, "/analytics/cluster", { constituency_id });
+    steps.push({ step: "cluster", status: "ok", hotspots: clusterResult?.hotspots_created ?? null });
+
+    const scoreResult = await proxyPost(req, "/analytics/score", { constituency_id });
+    steps.push({ step: "score", status: "ok", projects_scored: scoreResult?.projects_scored ?? null });
+
+    // Evidence generation is best-effort — non-fatal if Gemini is slow
+    try {
+      const evidenceResult = await proxyPost(req, "/analytics/evidence", { constituency_id, top_n: 5 });
+      steps.push({ step: "evidence", status: "ok", generated: evidenceResult?.evidence_generated ?? null });
+    } catch (evErr) {
+      steps.push({ step: "evidence", status: "skipped", reason: evErr.message });
+    }
+
+    res.json({ status: "success", constituency_id, steps, ran_at: new Date().toISOString() });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, steps });
   }
 });
 
@@ -276,6 +320,7 @@ app.get("/api/export/csv", requireAuth, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n⚖️  JanMat MP Dashboard → http://localhost:${PORT}`);
   console.log(`   API: ${API}`);
+  console.log(`   ETL: ${ETL || "(not configured)"}`);
   console.log(`   Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? "✅ enabled" : "⚠️  not configured (demo mode)"}`);
   console.log(`   Allowed MPs: ${ALLOWED_EMAILS.join(", ")}\n`);
 });
