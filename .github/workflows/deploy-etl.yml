@@ -70,7 +70,6 @@ jobs:
             --memory=512Mi
             --cpu=1
             --timeout=300
-            --update-secrets=GEMINI_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/janmat-gemini-api-key:latest
 
       - name: Print ETL URL
         run: |
