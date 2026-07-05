@@ -310,6 +310,20 @@ app.post("/api/pipeline/run", requireAuth, async (req, res) => {
   }
 });
 
+// ── Project completion ────────────────────────────────────────────────
+// Accepts JSON body with base64 image + GPS; proxies to backend for
+// Gemini image verification + geolocation check.
+app.post("/api/projects/complete", requireAuth, async (req, res) => {
+  try {
+    const result = await proxyPost(req, "/dashboard/projects/complete", req.body);
+    res.json(result);
+  } catch (e) {
+    const status = e.response?.status || 500;
+    const detail = e.response?.data?.detail || e.message;
+    res.status(status).json({ error: detail });
+  }
+});
+
 // ── CSV export ────────────────────────────────────────────────────────
 app.get("/api/export/csv", requireAuth, async (req, res) => {
   try {
@@ -322,7 +336,7 @@ app.get("/api/export/csv", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Start ─────────────────────────────────────────────────────────────
+// ── Start ──────────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n⚖️  JanMat MP Dashboard → http://localhost:${PORT}`);
   console.log(`   API: ${API}`);

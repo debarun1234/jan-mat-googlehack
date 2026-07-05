@@ -187,6 +187,125 @@ tr:last-child td{border-bottom:none}
 #notification.success{background:#2e7d32}
 #notification.error{background:#c62828}
 
+/* ── MP PROFILE DROPDOWN ── */
+.mp-chip{cursor:pointer;position:relative;user-select:none;transition:background .15s}
+.mp-chip:hover{background:rgba(255,255,255,.2)!important}
+#mp-dropdown{
+  display:none;position:fixed;top:62px;right:16px;
+  background:#fff;border-radius:14px;min-width:270px;
+  box-shadow:0 8px 40px rgba(0,0,0,.25);z-index:300;
+  border:1px solid #e0e7ff;overflow:hidden;
+}
+#mp-dropdown.open{display:block}
+.mpd-header{
+  background:linear-gradient(135deg,#0d1b6e,#3f51b5);
+  padding:20px;color:#fff;
+}
+.mpd-avatar{
+  width:52px;height:52px;border-radius:50%;
+  background:rgba(255,255,255,.2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;font-weight:800;margin-bottom:10px;overflow:hidden;
+}
+.mpd-avatar img{width:100%;height:100%;object-fit:cover}
+.mpd-name{font-size:.95rem;font-weight:800;line-height:1.2}
+.mpd-email{font-size:.72rem;opacity:.75;margin-top:3px;word-break:break-all}
+.mpd-body{padding:10px 8px}
+.mpd-item{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;
+  border-radius:8px;font-size:.82rem;color:#37474f;cursor:default;
+}
+.mpd-item .mpd-icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0}
+.mpd-divider{height:1px;background:#f0f4ff;margin:4px 8px}
+.mpd-signout{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;
+  border-radius:8px;font-size:.82rem;color:#c62828;cursor:pointer;
+  transition:background .15s;text-decoration:none;
+}
+.mpd-signout:hover{background:#ffebee}
+
+/* ── COMPLETION MODAL ── */
+#completion-modal{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.65);z-index:500;
+  align-items:center;justify-content:center;padding:16px;
+}
+#completion-modal.open{display:flex}
+.cm-box{
+  background:#fff;border-radius:20px;width:100%;max-width:560px;
+  max-height:92vh;overflow-y:auto;
+  box-shadow:0 24px 80px rgba(0,0,0,.35);
+}
+.cm-head{
+  background:linear-gradient(135deg,#0d1b6e,#3f51b5);
+  color:#fff;padding:20px 24px;border-radius:20px 20px 0 0;
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+.cm-head h3{font-size:1rem;font-weight:800;margin-bottom:3px;padding-right:12px}
+.cm-head p{font-size:.78rem;opacity:.8}
+.cm-close-btn{
+  background:rgba(255,255,255,.15);border:none;color:#fff;
+  width:30px;height:30px;border-radius:50%;cursor:pointer;
+  font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.cm-close-btn:hover{background:rgba(255,255,255,.3)}
+.cm-body{padding:20px 24px}
+.cm-section{margin-bottom:18px}
+.cm-lbl{font-size:.7rem;font-weight:700;color:#607d8b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+.cm-upload-zone{
+  border:2px dashed #c5cae9;border-radius:12px;padding:20px;
+  text-align:center;cursor:pointer;transition:all .2s;background:#f5f7ff;
+  position:relative;overflow:hidden;
+}
+.cm-upload-zone:hover{border-color:#3f51b5;background:#e8eaf6}
+.cm-upload-zone.has-img{border-color:#2e7d32;background:#f1f8e9;padding:8px}
+.cm-upload-zone input[type=file]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;
+}
+#cm-img-preview{
+  max-width:100%;max-height:180px;border-radius:8px;
+  display:none;margin:0 auto;object-fit:contain;
+}
+.cm-geo-box{
+  background:#f5f7ff;border-radius:10px;padding:14px;
+  display:flex;align-items:center;gap:12px;
+}
+.cm-geo-icon{font-size:1.4rem;flex-shrink:0}
+.cm-geo-info{flex:1;font-size:.82rem;color:#546e7a}
+.cm-geo-info strong{display:block;font-size:.88rem;color:var(--primary)}
+.cm-notes textarea{
+  width:100%;border:1px solid #e0e7ff;border-radius:8px;
+  padding:10px 12px;font-size:.84rem;resize:vertical;min-height:68px;
+  font-family:inherit;color:#37474f;background:#fafbff;
+  transition:border .15s;
+}
+.cm-notes textarea:focus{outline:none;border-color:#3f51b5;background:#fff}
+.cm-result{border-radius:12px;padding:16px;display:none;margin-bottom:4px}
+.cm-result.show{display:block}
+.cm-result.pass{background:#e8f5e9;border:1px solid #a5d6a7}
+.cm-result.fail{background:#ffebee;border:1px solid #ef9a9a}
+.cm-result-title{font-weight:800;font-size:.9rem;margin-bottom:10px}
+.cm-check-row{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px}
+.cm-badge{
+  flex-shrink:0;width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;font-weight:800;margin-top:1px;
+}
+.cm-badge.ok{background:#2e7d32;color:#fff}
+.cm-badge.no{background:#c62828;color:#fff}
+.cm-check-text{font-size:.8rem;color:#37474f;line-height:1.5}
+.cm-foot{padding:0 24px 20px;display:flex;gap:10px;justify-content:flex-end}
+
+/* ── MARK COMPLETE BUTTON ── */
+.btn-complete{
+  background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;
+  border:none;padding:9px 18px;border-radius:8px;
+  font-size:.8rem;font-weight:700;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;
+  transition:all .2s;margin-top:12px;
+}
+.btn-complete:hover{background:linear-gradient(135deg,#2e7d32,#388e3c);box-shadow:0 4px 12px rgba(46,125,50,.3)}
+
 /* ── RESPONSIVE ── */
 @media(max-width:1200px){.grid-2,.grid-12,.grid-21{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:768px){.sidebar{display:none}.main{margin-left:0}.kpi-grid{grid-template-columns:1fr 1fr}}
@@ -207,11 +326,11 @@ tr:last-child td{border-bottom:none}
   <div class="topbar-right">
     <button class="topbar-btn" onclick="runPipeline()">🔄 Refresh</button>
     <button class="topbar-btn" onclick="exportCSV()">⬇ CSV</button>
-    <div class="mp-chip">
+    <div class="mp-chip" id="mp-chip-btn" onclick="toggleMpDropdown()" title="MP Profile">
       <div class="mp-avatar" id="mp-avatar">MP</div>
       <span id="mp-name-label">Loading...</span>
+      <span style="font-size:.6rem;opacity:.6;margin-left:2px">▾</span>
     </div>
-    <button class="topbar-btn" onclick="location.href='/auth/logout'">Sign Out</button>
   </div>
 </div>
 
@@ -666,6 +785,7 @@ tr:last-child td{border-bottom:none}
 let session = null;
 let map = null, heatLayer = null, allHeatData = [];
 let charts = {};
+let projectsList = [];
 const CAT_COLORS = {
   Education:'#1565c0', Health:'#c62828', Roads:'#e65100',
   Water:'#00695c', Sanitation:'#4a148c', Other:'#546e7a'
@@ -901,12 +1021,13 @@ async function loadProjects() {
   try {
     const data = await (await fetch('/api/projects')).json();
     if (!data.projects?.length) { el.innerHTML='<div class="loading">No projects yet. Run the pipeline.</div>'; return; }
-    el.innerHTML = data.projects.map(p=>{
+    projectsList = data.projects;
+    el.innerHTML = data.projects.map((p, i)=>{
       const rankBg = p.rank===1?'#ffd700':p.rank===2?'#c0c0c0':p.rank===3?'#cd7f32':'#e8eaf6';
       const rankCol = p.rank<=3?'#000':'#3f51b5';
       const urgCol = p.avg_urgency>=4?'#c62828':p.avg_urgency>=3?'#e65100':'#2e7d32';
       const w = Math.round(p.priority_score*10);
-      return `<div class="card" style="margin-bottom:16px">
+      return `<div class="card" style="margin-bottom:16px" data-project-rank="${p.rank}">
         <div class="card-body">
           <div style="display:flex;align-items:flex-start;gap:16px">
             <div style="width:44px;height:44px;border-radius:50%;background:${rankBg};color:${rankCol};
@@ -942,11 +1063,17 @@ async function loadProjects() {
                 <div style="font-size:.65rem;font-weight:700;color:#558b2f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔍 Evidence Log</div>
                 <div style="font-size:.82rem;color:#37474f;line-height:1.6">${p.evidence_log}</div>
               </div>`:''}
+              <div style="display:flex;justify-content:flex-end;margin-top:12px">
+                <button class="btn-complete" onclick="openCompletionModal(${i})">
+                  ✅ Mark Complete
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>`;
     }).join('');
+    document.getElementById('badge-projects').textContent = data.projects.length;
   } catch(e) { el.innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message}</div>`; }
 }
 
@@ -1064,7 +1191,6 @@ async function runPipeline() {
     const res = await fetch('/api/pipeline/run',{method:'POST'});
     const data = await res.json();
     if(!res.ok) throw new Error(data.error||'Pipeline failed');
-    // Build step summary
     const stepSummary = (data.steps||[]).map(s=>{
       const icon = s.status==='ok'?'✅':s.status==='skipped'?'⚠️':'❌';
       return `${icon} ${s.step}`;
@@ -1136,6 +1262,289 @@ function sortTable(tableId, col) {
 
 // ── Boot ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<!-- ── MP Profile Dropdown ── -->
+<div id="mp-dropdown">
+  <div class="mpd-header">
+    <div class="mpd-avatar" id="mpd-avatar">M</div>
+    <div class="mpd-name" id="mpd-name">Loading...</div>
+    <div class="mpd-email" id="mpd-email">—</div>
+  </div>
+  <div class="mpd-body">
+    <div class="mpd-item"><span class="mpd-icon">📍</span><span id="mpd-constituency">—</span></div>
+    <div class="mpd-item"><span class="mpd-icon">🏛️</span><span>Member of Parliament</span></div>
+    <div class="mpd-item"><span class="mpd-icon">🔐</span><span>Signed in via Google</span></div>
+    <div class="mpd-divider"></div>
+    <a class="mpd-signout" href="/auth/logout"><span class="mpd-icon">🚪</span>Sign Out</a>
+  </div>
+</div>
+
+<!-- ── Completion Modal ── -->
+<div id="completion-modal" role="dialog" aria-modal="true">
+  <div class="cm-box">
+    <div class="cm-head">
+      <div>
+        <h3 id="cm-project-title">Mark Project Complete</h3>
+        <p id="cm-project-cat">Provide photo evidence from the project location</p>
+      </div>
+      <button class="cm-close-btn" onclick="closeCompletionModal()" title="Close">✕</button>
+    </div>
+    <div class="cm-body">
+      <!-- Image Upload -->
+      <div class="cm-section">
+        <div class="cm-lbl">📷 Completion Photo <span style="color:#c62828">*</span></div>
+        <div class="cm-upload-zone" id="cm-upload-zone" onclick="document.getElementById('cm-file-input').click()">
+          <input type="file" id="cm-file-input" accept="image/*" onchange="handleImageUpload(this)">
+          <div id="cm-upload-placeholder">
+            <div style="font-size:2rem;margin-bottom:6px">📷</div>
+            <div style="font-size:.85rem;font-weight:700;color:#3f51b5">Click to upload photo</div>
+            <div style="font-size:.75rem;color:#90a4ae;margin-top:4px">JPG, PNG, WEBP — max 10 MB</div>
+          </div>
+          <img id="cm-img-preview" alt="Preview">
+        </div>
+      </div>
+      <!-- Geolocation -->
+      <div class="cm-section">
+        <div class="cm-lbl">📍 Location Verification <span style="color:#c62828">*</span></div>
+        <div class="cm-geo-box">
+          <div class="cm-geo-icon">📍</div>
+          <div class="cm-geo-info">
+            <strong id="cm-geo-status">Location not captured</strong>
+            <span id="cm-geo-coords" style="font-size:.75rem;color:#90a4ae">Click to capture your current GPS location</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="captureLocation()">Capture</button>
+        </div>
+      </div>
+      <!-- Notes -->
+      <div class="cm-section cm-notes">
+        <div class="cm-lbl">📝 Notes (optional)</div>
+        <textarea id="cm-notes" placeholder="Any additional remarks about the completion..."></textarea>
+      </div>
+      <!-- Verification Result -->
+      <div class="cm-result" id="cm-result">
+        <div class="cm-result-title" id="cm-result-title">Verification Result</div>
+        <div class="cm-check-row">
+          <div class="cm-badge" id="cm-geo-badge">?</div>
+          <div class="cm-check-text" id="cm-geo-result-text">Checking geolocation...</div>
+        </div>
+        <div class="cm-check-row">
+          <div class="cm-badge" id="cm-ai-badge">?</div>
+          <div class="cm-check-text" id="cm-ai-result-text">Running AI verification...</div>
+        </div>
+        <div id="cm-ai-issues" style="margin-top:8px;display:none"></div>
+      </div>
+    </div>
+    <div class="cm-foot">
+      <button class="btn btn-ghost" onclick="closeCompletionModal()">Cancel</button>
+      <button class="btn btn-success btn-lg" id="cm-submit-btn" onclick="submitCompletion()">
+        ✅ Verify &amp; Complete
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Completion flow globals ───────────────────────────────────────────
+let completionProject = null;
+let completionLat = null, completionLon = null;
+let completionImageB64 = null, completionMime = null;
+
+// ── MP Profile Dropdown ────────────────────────────────────────────────
+function toggleMpDropdown() {
+  const dd = document.getElementById('mp-dropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  if (!isOpen && session) {
+    const avatarEl = document.getElementById('mpd-avatar');
+    if (session.avatar) {
+      avatarEl.innerHTML = '<img src="' + session.avatar + '" alt="">';
+    } else {
+      avatarEl.textContent = session.name?.charAt(0) || 'M';
+    }
+    document.getElementById('mpd-name').textContent = session.name || '—';
+    document.getElementById('mpd-email').textContent = session.email || '—';
+    document.getElementById('mpd-constituency').textContent = session.constituency_id || '—';
+  }
+}
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('mp-dropdown');
+  if (!document.getElementById('mp-chip-btn')?.contains(e.target) &&
+      !dd?.contains(e.target)) {
+    dd?.classList.remove('open');
+  }
+});
+
+// ── Completion modal ───────────────────────────────────────────────────
+function openCompletionModal(idx) {
+  completionProject = projectsList[idx];
+  if (!completionProject) return;
+  completionLat = null; completionLon = null;
+  completionImageB64 = null; completionMime = null;
+
+  document.getElementById('cm-project-title').textContent = completionProject.suggested_project;
+  document.getElementById('cm-project-cat').textContent = completionProject.category + ' · Rank #' + completionProject.rank;
+  document.getElementById('cm-upload-zone').classList.remove('has-img');
+  document.getElementById('cm-upload-placeholder').style.display = '';
+  const preview = document.getElementById('cm-img-preview');
+  preview.style.display = 'none'; preview.src = '';
+  document.getElementById('cm-file-input').value = '';
+  document.getElementById('cm-geo-status').textContent = 'Location not captured';
+  document.getElementById('cm-geo-coords').textContent = 'Click to capture your current GPS location';
+  document.getElementById('cm-notes').value = '';
+  const resultEl = document.getElementById('cm-result');
+  resultEl.className = 'cm-result';
+  const submitBtn = document.getElementById('cm-submit-btn');
+  submitBtn.disabled = false; submitBtn.textContent = '✅ Verify & Complete';
+
+  document.getElementById('completion-modal').classList.add('open');
+}
+
+function closeCompletionModal() {
+  document.getElementById('completion-modal').classList.remove('open');
+}
+
+document.getElementById('completion-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeCompletionModal();
+});
+
+function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { notify('Image must be under 10 MB', 'error'); return; }
+  completionMime = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    completionImageB64 = e.target.result.split(',')[1];
+    const preview = document.getElementById('cm-img-preview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    document.getElementById('cm-upload-placeholder').style.display = 'none';
+    document.getElementById('cm-upload-zone').classList.add('has-img');
+  };
+  reader.readAsDataURL(file);
+}
+
+function captureLocation() {
+  const statusEl = document.getElementById('cm-geo-status');
+  const coordsEl = document.getElementById('cm-geo-coords');
+  statusEl.textContent = 'Capturing location...';
+  coordsEl.textContent = 'Please allow location access';
+  if (!navigator.geolocation) {
+    statusEl.textContent = 'Geolocation not supported by this browser';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      completionLat = pos.coords.latitude;
+      completionLon = pos.coords.longitude;
+      statusEl.textContent = '✅ Location captured';
+      coordsEl.textContent = completionLat.toFixed(5) + '°N, ' + completionLon.toFixed(5) + '°E (±' + Math.round(pos.coords.accuracy) + 'm)';
+    },
+    function(err) {
+      statusEl.textContent = '❌ Location access denied';
+      coordsEl.textContent = err.message;
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+async function submitCompletion() {
+  if (!completionProject) return;
+  if (!completionImageB64) { notify('Please upload a completion photo', 'error'); return; }
+  if (completionLat === null) { notify('Please capture your location first', 'error'); return; }
+
+  const btn = document.getElementById('cm-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.7">⏳ Verifying...</span>';
+
+  const resultEl = document.getElementById('cm-result');
+  resultEl.className = 'cm-result show';
+  resultEl.style.background = '#f5f7ff'; resultEl.style.border = '1px solid #c5cae9';
+  document.getElementById('cm-result-title').textContent = '⏳ Running verifications...';
+  document.getElementById('cm-geo-badge').className = 'cm-badge';
+  document.getElementById('cm-geo-badge').textContent = '…';
+  document.getElementById('cm-ai-badge').className = 'cm-badge';
+  document.getElementById('cm-ai-badge').textContent = '…';
+  document.getElementById('cm-geo-result-text').textContent = 'Checking GPS distance to project site...';
+  document.getElementById('cm-ai-result-text').textContent = 'Gemini is analysing your photo...';
+  document.getElementById('cm-ai-issues').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/projects/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_name:  completionProject.suggested_project,
+        category:      completionProject.category,
+        center_lat:    completionProject.center_lat,
+        center_lon:    completionProject.center_lon,
+        radius_km:     completionProject.radius_km,
+        submitted_lat: completionLat,
+        submitted_lon: completionLon,
+        image_base64:  completionImageB64,
+        mime_type:     completionMime || 'image/jpeg',
+        notes:         document.getElementById('cm-notes').value,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Verification failed');
+
+    // Geo result
+    const geoBadge = document.getElementById('cm-geo-badge');
+    geoBadge.className = 'cm-badge ' + (data.geo_verified ? 'ok' : 'no');
+    geoBadge.textContent = data.geo_verified ? '✓' : '✗';
+    document.getElementById('cm-geo-result-text').innerHTML = data.geo_verified
+      ? '<strong>Location verified</strong> — ' + data.geo_distance_km.toFixed(2) + ' km from project site (within ' + data.geo_threshold_km + ' km threshold)'
+      : '<strong>Location mismatch</strong> — you are ' + data.geo_distance_km.toFixed(2) + ' km away (max: ' + data.geo_threshold_km + ' km). Photo must be taken on-site.';
+
+    // AI result
+    const aiBadge = document.getElementById('cm-ai-badge');
+    aiBadge.className = 'cm-badge ' + (data.ai_verified ? 'ok' : 'no');
+    aiBadge.textContent = data.ai_verified ? '✓' : '✗';
+    document.getElementById('cm-ai-result-text').innerHTML =
+      '<strong>' + (data.ai_verified ? 'AI verified' : 'AI rejected') + '</strong> (' + data.ai_confidence + '% confidence) — ' + data.ai_reasoning;
+
+    if (!data.ai_verified && data.ai_issues?.length) {
+      const issuesEl = document.getElementById('cm-ai-issues');
+      issuesEl.style.display = 'block';
+      issuesEl.innerHTML = '<div style="font-size:.75rem;font-weight:700;color:#c62828;margin-bottom:4px">Issues:</div>' +
+        data.ai_issues.map(function(i) { return '<div style="font-size:.78rem;color:#c62828;margin-bottom:2px">• ' + i + '</div>'; }).join('');
+    }
+
+    // Overall result
+    resultEl.className = 'cm-result show ' + (data.overall_verified ? 'pass' : 'fail');
+    document.getElementById('cm-result-title').textContent = data.overall_verified
+      ? '✅ Completion Verified — Project Marked Complete'
+      : '❌ Verification Failed — Completion Not Recorded';
+
+    if (data.overall_verified) {
+      // Remove project card from DOM
+      const card = document.querySelector('[data-project-rank="' + completionProject.rank + '"]');
+      if (card) {
+        card.style.transition = 'opacity .5s,transform .5s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(40px)';
+        setTimeout(function() { card.remove(); }, 500);
+      }
+      projectsList = projectsList.filter(function(p) { return p.rank !== completionProject.rank; });
+      notify('✅ Project #' + completionProject.rank + ' marked complete and removed from list', 'success');
+      btn.textContent = '✅ Verified!';
+      setTimeout(closeCompletionModal, 2500);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '🔄 Try Again';
+    }
+
+  } catch(e) {
+    resultEl.className = 'cm-result show fail';
+    document.getElementById('cm-result-title').textContent = '❌ Error';
+    document.getElementById('cm-geo-result-text').textContent = e.message;
+    document.getElementById('cm-ai-result-text').textContent = 'Could not reach verification service';
+    btn.disabled = false;
+    btn.textContent = '🔄 Try Again';
+  }
+}
 </script>
 </body>
 </html>

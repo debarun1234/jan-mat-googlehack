@@ -120,6 +120,24 @@ Extract structured grievance data as JSON matching the required schema.
 For location: use Bangalore North constituency centroid (13.0827, 77.5878) unless a sign or landmark indicates otherwise."""
 
 
+class CompletionVerification(BaseModel):
+    """Structured result of Gemini image verification for project completion."""
+
+    verified: bool = Field(
+        description="True if the image clearly shows this project type is completed or substantially progressed"
+    )
+    confidence: int = Field(
+        ge=0, le=100, description="Confidence percentage 0-100"
+    )
+    reasoning: str = Field(
+        description="2-3 sentence factual explanation of the decision with specific visual observations"
+    )
+    issues: list[str] = Field(
+        default_factory=list,
+        description="Specific blockers if verified=false, empty list if verified=true",
+    )
+
+
 class GeminiService:
     def __init__(self):
         settings = get_settings()
@@ -293,6 +311,80 @@ Write the Evidence Log now:"""
             chars=len(evidence),
         )
         return evidence
+
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=2, max=8),
+        reraise=True,
+    )
+    async def verify_completion_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        project_description: str,
+        category: str,
+    ) -> "CompletionVerification":
+        """
+        Use Gemini vision to verify a project completion photo.
+        Uses a fresh model without the grievance extraction system instruction.
+        Returns structured CompletionVerification.
+        """
+        prompt = f"""You are a government project completion inspector in India.
+
+Project to verify: {project_description}
+Category: {category}
+
+Examine this photo and determine:
+1. Does it clearly show completed or substantially progressed work for this infrastructure type?
+2. Is the work visible, real, and substantial (not a stock photo or unrelated image)?
+3. Does the scene match what you would expect for a {category} infrastructure project?
+
+Be strict: verified=true only for clear photographic evidence matching the project type.
+Do NOT approve: empty land, unrelated photos, vague blurry images with no identifiable infrastructure.
+
+Return JSON with:
+- verified: boolean (true only for clear visual evidence of completion)
+- confidence: integer 0-100
+- reasoning: string, 2-3 sentences explaining your decision with specific visual observations
+- issues: array of strings listing blockers if verified=false, empty array if verified=true"""
+
+        # Fresh model WITHOUT the grievance extraction system instruction
+        model = GenerativeModel(
+            model_name=self._model_name,
+            safety_settings=[
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+            ],
+        )
+
+        t0 = time.monotonic()
+        image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
+        response = await model.generate_content_async(
+            [image_part, prompt],
+            generation_config=GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=512,
+                response_mime_type="application/json",
+                response_schema=CompletionVerification.model_json_schema(),
+            ),
+        )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+
+        result = CompletionVerification.model_validate_json(response.text)
+        log.info(
+            "gemini_completion_verification",
+            verified=result.verified,
+            confidence=result.confidence,
+            latency_ms=latency_ms,
+            project=project_description[:60],
+        )
+        return result
 
 
 # ── Singleton ─────────────────────────────────────────────────────────

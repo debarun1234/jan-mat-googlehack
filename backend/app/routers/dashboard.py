@@ -9,6 +9,9 @@ Endpoints:
   GET  /dashboard/export/csv       — CSV export of ranked recommendations
 """
 
+import base64
+import math
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -22,6 +25,7 @@ from pydantic import BaseModel
 from app.config import Settings, get_settings
 from app.services.bigquery import BigQueryService, get_bigquery_service
 from app.services.gemini import GeminiService, get_gemini_service
+from app.services.storage import StorageService, get_storage_service
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -317,7 +321,146 @@ async def get_trends(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# ── CSV Export ────────────────────────────────────────────────────────
+# ── Project Completion ────────────────────────────────────────────────
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Haversine distance in km between two GPS coordinates."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(
+        math.radians(lat2)
+    ) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+class CompletionRequest(BaseModel):
+    project_name: str
+    category: str
+    center_lat: float
+    center_lon: float
+    radius_km: float
+    submitted_lat: float
+    submitted_lon: float
+    image_base64: str          # base64url or standard base64 encoded image bytes
+    mime_type: str = "image/jpeg"
+    notes: str = ""
+
+
+@router.post("/projects/complete")
+async def submit_project_completion(
+    body: CompletionRequest,
+    mp: Annotated[dict, Depends(_get_current_mp)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    gcs: Annotated[StorageService, Depends(get_storage_service)],
+):
+    """
+    MP submits project completion evidence.
+
+    Runs two mandatory verifications:
+      1. Geolocation -- GPS coordinates must be within project radius (+0.5 km buffer)
+      2. Gemini vision -- image must visually show the completed project type
+
+    Both must pass for the completion to be recorded.
+    """
+    completion_id = str(uuid.uuid4())
+    mp_email = mp.get("sub", "unknown")
+    constituency_id = mp.get("constituency_id", settings.constituency_id)
+
+    # 1. Geolocation verification
+    distance_km = _haversine_km(
+        body.submitted_lat, body.submitted_lon,
+        body.center_lat, body.center_lon,
+    )
+    geo_threshold = max(body.radius_km + 0.5, 1.0)
+    geo_verified = distance_km <= geo_threshold
+
+    # 2. Decode image
+    try:
+        padded = body.image_base64 + "=" * (-len(body.image_base64) % 4)
+        image_bytes = base64.b64decode(padded.replace("-", "+").replace("_", "/"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    # 3. Gemini image verification
+    try:
+        ai_result = await gemini.verify_completion_image(
+            image_bytes=image_bytes,
+            mime_type=body.mime_type,
+            project_description=body.project_name,
+            category=body.category,
+        )
+    except Exception as e:
+        log.error("gemini_completion_failed", error=str(e), project=body.project_name)
+        raise HTTPException(status_code=500, detail=f"AI verification failed: {e}")
+
+    overall = geo_verified and ai_result.verified
+
+    # 4. If both verified: upload to GCS + log to BigQuery
+    evidence_gcs_uri = ""
+    if overall:
+        try:
+            evidence_gcs_uri = await gcs.upload_image(
+                image_bytes=image_bytes,
+                submission_id=f"completion_{completion_id}",
+                constituency_id=constituency_id,
+                content_type=body.mime_type,
+            )
+        except Exception as e:
+            log.warning("gcs_completion_upload_failed", error=str(e), completion_id=completion_id)
+            evidence_gcs_uri = ""
+
+        try:
+            await bq.log_project_completion(
+                completion_id=completion_id,
+                constituency_id=constituency_id,
+                mp_email=mp_email,
+                project_name=body.project_name,
+                category=body.category,
+                center_lat=body.center_lat,
+                center_lon=body.center_lon,
+                submitted_lat=body.submitted_lat,
+                submitted_lon=body.submitted_lon,
+                distance_km=distance_km,
+                geo_verified=geo_verified,
+                ai_verified=ai_result.verified,
+                ai_confidence=ai_result.confidence,
+                ai_reasoning=ai_result.reasoning,
+                evidence_gcs_uri=evidence_gcs_uri,
+                notes=body.notes,
+            )
+        except Exception as e:
+            log.warning("bq_completion_log_failed", error=str(e), completion_id=completion_id)
+
+    log.info(
+        "project_completion_submitted",
+        completion_id=completion_id,
+        project=body.project_name,
+        geo_verified=geo_verified,
+        ai_verified=ai_result.verified,
+        overall=overall,
+        distance_km=round(distance_km, 3),
+        mp=mp_email,
+    )
+
+    return {
+        "completion_id": completion_id,
+        "overall_verified": overall,
+        "geo_verified": geo_verified,
+        "geo_distance_km": round(distance_km, 3),
+        "geo_threshold_km": round(geo_threshold, 3),
+        "ai_verified": ai_result.verified,
+        "ai_confidence": ai_result.confidence,
+        "ai_reasoning": ai_result.reasoning,
+        "ai_issues": ai_result.issues,
+        "evidence_gcs_uri": evidence_gcs_uri if overall else None,
+    }
+
+
+# -- CSV Export -----------------------------------------------------------
 
 
 @router.get("/export/csv")

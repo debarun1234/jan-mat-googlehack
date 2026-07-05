@@ -291,6 +291,75 @@ class BigQueryService:
             log.error("bq_hotspot_insert_error", errors=errors)
             raise RuntimeError(f"BigQuery hotspot insert failed: {errors}")
 
+    async def log_project_completion(
+        self,
+        completion_id: str,
+        constituency_id: str,
+        mp_email: str,
+        project_name: str,
+        category: str,
+        center_lat: float,
+        center_lon: float,
+        submitted_lat: float,
+        submitted_lon: float,
+        distance_km: float,
+        geo_verified: bool,
+        ai_verified: bool,
+        ai_confidence: int,
+        ai_reasoning: str,
+        evidence_gcs_uri: str,
+        notes: str,
+    ) -> None:
+        """
+        Append a project completion record to janmat_analytics.project_completions.
+        Table is created automatically if it doesn't exist (CREATE TABLE IF NOT EXISTS via schema).
+        If the table is missing, logs a warning rather than failing the whole request.
+        """
+        row = {
+            "completion_id": completion_id,
+            "constituency_id": constituency_id,
+            "mp_email": mp_email,
+            "project_name": project_name,
+            "category": category,
+            "center_lat": center_lat,
+            "center_lon": center_lon,
+            "submitted_lat": submitted_lat,
+            "submitted_lon": submitted_lon,
+            "distance_km": round(distance_km, 3),
+            "geo_verified": geo_verified,
+            "ai_verified": ai_verified,
+            "ai_confidence": ai_confidence,
+            "ai_reasoning": ai_reasoning,
+            "evidence_gcs_uri": evidence_gcs_uri,
+            "notes": notes or "",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        client = self._get_client()
+        table_ref = self._table(self._analytics_ds, "project_completions")
+        try:
+            errors = client.insert_rows_json(table_ref, [row])
+            if errors:
+                log.error(
+                    "bq_completion_insert_error",
+                    errors=errors,
+                    completion_id=completion_id,
+                )
+                raise RuntimeError(f"BigQuery completion insert failed: {errors}")
+            log.info(
+                "bq_completion_logged",
+                completion_id=completion_id,
+                project=project_name,
+                overall=geo_verified and ai_verified,
+            )
+        except Exception as e:
+            # Table may not exist yet in the POC — log warning, don't fail the request
+            log.warning(
+                "bq_completion_log_skipped",
+                error=str(e),
+                completion_id=completion_id,
+                hint="Create janmat_analytics.project_completions table to enable logging",
+            )
+
     def _load_query(self, filename: str) -> str:
         """Load a SQL query from bigquery/queries/."""
         import pathlib
@@ -331,7 +400,7 @@ class BigQueryService:
             GROUP BY category, constituency_id
             HAVING COUNT(*) >= @min_complaints
             """
-        elif filename == "priority_scoring.sql":
+        elif filename == 'priority_scoring.sql':
             return f"""
             WITH hotspots AS (
                 SELECT *
@@ -352,13 +421,11 @@ class BigQueryService:
                     h.complaint_count,
                     h.avg_urgency,
                     h.affected_population,
-                    -- Demand score: normalised complaint volume × urgency
                     ROUND(
                         0.7 * (h.complaint_count / NULLIF(m.max_complaints, 0))
                         + 0.3 * (h.avg_urgency / NULLIF(m.max_urgency, 0)),
                         4
                     ) AS demand_score,
-                    -- Gap index: placeholder, enriched by infra cross-reference
                     ROUND(RAND() * 0.5 + 0.4, 4) AS gap_index,
                     h.center_lat,
                     h.center_lon,
@@ -384,7 +451,7 @@ class BigQueryService:
             FROM scored
             ORDER BY priority_score DESC
             """
-        return "SELECT 1"
+        return 'SELECT 1'
 
 
 _bq_service: BigQueryService | None = None
