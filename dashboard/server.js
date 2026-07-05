@@ -10,8 +10,9 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API = process.env.JANMAT_API_URL || "http://localhost:8080";
-const ALLOWED_EMAILS = (process.env.ALLOWED_MP_EMAILS || "mp@janmat.demo,quantumduobuilder@gmail.com")
-  .split(",").map(e => e.trim().toLowerCase());
+const ALLOWED_EMAILS_RAW = process.env.ALLOWED_MP_EMAILS || "mp@janmat.demo,quantumduobuilder@gmail.com";
+const ALLOW_ALL_EMAILS = ALLOWED_EMAILS_RAW.trim() === "*";
+const ALLOWED_EMAILS = ALLOW_ALL_EMAILS ? [] : ALLOWED_EMAILS_RAW.split(",").map(e => e.trim().toLowerCase());
 const DEMO_MODE = process.env.DEMO_MODE === "true";
 
 // ── Middleware ────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     callbackURL:  process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/auth/google/callback",
   }, async (accessToken, refreshToken, profile, done) => {
     const email = profile.emails?.[0]?.value?.toLowerCase();
-    if (!ALLOWED_EMAILS.includes(email)) {
+    if (!ALLOW_ALL_EMAILS && !ALLOWED_EMAILS.includes(email)) {
       return done(null, false, { message: `Unauthorized: ${email} is not an authorized MP` });
     }
     const user = {
