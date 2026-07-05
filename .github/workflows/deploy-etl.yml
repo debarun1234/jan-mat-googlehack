@@ -58,7 +58,6 @@ jobs:
             API_HOST: "0.0.0.0"
             API_PORT: "8000"
             ENVEOF
-          # Replace shell vars (single-quoted heredoc prevents expansion above)
           sed -i "s/\$PROJECT_ID/$PROJECT_ID/g" /tmp/etl-env.yaml
 
       - name: Deploy to Cloud Run
@@ -70,8 +69,8 @@ jobs:
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
           env_vars_file: /tmp/etl-env.yaml
-          port: 8000
           flags: >-
+            --port=8000
             --min-instances=0
             --max-instances=3
             --memory=512Mi
