@@ -12,31 +12,61 @@ const PORT = process.env.PORT || 3000;
 const API = process.env.JANMAT_API_URL || "http://localhost:8080";
 const ETL = process.env.JANMAT_ETL_URL || "";
 
-// Shared service key — must match JANMAT_DASHBOARD_KEY on the backend
 const DASHBOARD_SERVICE_KEY = process.env.JANMAT_DASHBOARD_KEY || "JanMat-Dashboard-2025";
 
 const ALLOWED_EMAILS_RAW = process.env.ALLOWED_MP_EMAILS || "";
 const ALLOW_ALL_EMAILS = ALLOWED_EMAILS_RAW.trim() === "*" || !ALLOWED_EMAILS_RAW;
 const ALLOWED_EMAILS = ALLOW_ALL_EMAILS ? [] : ALLOWED_EMAILS_RAW.split(",").map(e => e.trim().toLowerCase());
 
+// ── Cookie helpers ────────────────────────────────────────────────────
+const AUTH_COOKIE   = "janmat_auth";   // signed backend JWT — used for auth
+const SECURE_FLAG   = process.env.NODE_ENV === "production" ? "; Secure" : "";
+const AUTH_MAX_AGE  = 8 * 60 * 60;    // 8 hours in seconds
+
+function setAuthCookie(res, token) {
+  res.setHeader("Set-Cookie",
+    `${AUTH_COOKIE}=${token}; HttpOnly; SameSite=Lax; Max-Age=${AUTH_MAX_AGE}; Path=/${SECURE_FLAG}`
+  );
+}
+
+function clearAuthCookie(res) {
+  res.setHeader("Set-Cookie",
+    `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/${SECURE_FLAG}`
+  );
+}
+
+function getAuthToken(req) {
+  const match = (req.headers.cookie || "").match(new RegExp(`(?:^|;\\s*)${AUTH_COOKIE}=([^;]+)`));
+  return match ? match[1] : null;
+}
+
+// Decode JWT payload without verifying signature (backend verifies on every API call)
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = token.split(".");
+    // base64url → base64 → JSON
+    const json = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 // ── Middleware ────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// cookie-session: stores all session state in a signed client-side cookie.
-// This is stateless — works across all Cloud Run instances with no shared memory store.
+// cookie-session is used ONLY for the OAuth state (stored between /auth/google
+// and /auth/google/callback to prevent CSRF). User auth uses janmat_auth cookie directly.
 app.use(cookieSession({
-  name:   "janmat_sess",
-  keys:   [process.env.SESSION_SECRET || "janmat-dev-secret-change-me"],
-  maxAge: 8 * 60 * 60 * 1000, // 8 hours
-  secure: process.env.NODE_ENV === "production",
+  name:     "janmat_oauth",
+  keys:     [process.env.SESSION_SECRET || "janmat-dev-secret-change-me"],
+  maxAge:   10 * 60 * 1000, // 10 minutes — only needed during OAuth flow
+  secure:   process.env.NODE_ENV === "production",
   sameSite: "lax",
 }));
 
-// Only passport.initialize() — we do NOT use passport.session().
-// Passport 0.7 session manager is incompatible with cookie-session (no-op shim is unreliable).
-// Instead we manually persist req.user → req.session.user after OAuth callback.
 app.use(passport.initialize());
 
 // ── Passport Google OAuth 2.0 ─────────────────────────────────────────
@@ -47,10 +77,9 @@ passport.use(new GoogleStrategy({
 }, async (accessToken, refreshToken, profile, done) => {
   const email = profile.emails?.[0]?.value?.toLowerCase();
   if (!ALLOW_ALL_EMAILS && !ALLOWED_EMAILS.includes(email)) {
-    return done(null, false, { message: `Unauthorized: ${email} is not an authorized MP` });
+    return done(null, false, { message: `Unauthorized: ${email}` });
   }
   return done(null, {
-    google_id:       profile.id,
     email,
     name:            profile.displayName,
     avatar:          profile.photos?.[0]?.value,
@@ -60,53 +89,61 @@ passport.use(new GoogleStrategy({
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────
-// User is stored directly in cookie-session as req.session.user (not via passport.session).
+// Reads the janmat_auth JWT cookie, decodes payload, sets req.user + req.authToken.
 function requireAuth(req, res, next) {
-  const user = req.session?.user;
-  if (user) {
-    req.user = user; // restore for getMPUser()
-    return next();
+  const token = getAuthToken(req);
+  if (!token) return res.redirect("/login");
+
+  const payload = decodeJwtPayload(token);
+  if (!payload) return res.redirect("/login");
+
+  // Check expiry
+  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+    clearAuthCookie(res);
+    return res.redirect("/login");
   }
-  res.redirect("/login");
+
+  req.user      = { email: payload.sub, name: payload.name, constituency_id: payload.constituency_id, avatar: payload.avatar };
+  req.authToken = token;
+  return next();
 }
 
-function getMPUser(req) {
-  return req.session?.user || req.user || null;
-}
+function getMPUser(req) { return req.user || null; }
 
 // ── Auth Routes ───────────────────────────────────────────────────────
 app.get("/", requireAuth, (req, res) => res.redirect("/dashboard"));
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 
-// Google OAuth — redirect to Google
 app.get("/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
-// Google OAuth — callback: get backend JWT using real user identity
-// session: false → skip passport.session() manager; we persist manually below.
+// OAuth callback — passport authenticates (session:false), we get backend JWT,
+// store it as a plain HttpOnly cookie, then redirect to dashboard.
 app.get("/auth/google/callback",
   passport.authenticate("google", { session: false, failureRedirect: "/login?error=unauthorized" }),
   async (req, res) => {
-    // Manually store user in cookie-session (bypasses passport.session() compat issues)
-    req.session.user = req.user;
     try {
       const { data } = await axios.post(`${API}/dashboard/auth/google-login`, {
-        email:       req.user.email,
-        name:        req.user.name,
-        service_key: DASHBOARD_SERVICE_KEY,
+        email:           req.user.email,
+        name:            req.user.name,
+        service_key:     DASHBOARD_SERVICE_KEY,
         constituency_id: req.user.constituency_id || "KA-BLR-NORTH-01",
       }, { headers: { "Content-Type": "application/json" }, timeout: 20000 });
-      req.session.apiToken = data.access_token;
+
+      // ✅ Set the backend JWT directly as an HttpOnly cookie — no session library involved.
+      setAuthCookie(res, data.access_token);
+      console.log(`[auth] login OK: ${req.user.email}`);
     } catch (err) {
-      console.error("Backend JWT exchange failed:", err.response?.data || err.message);
+      console.error("[auth] backend JWT exchange failed:", err.response?.data || err.message);
+      return res.redirect("/login?error=backend_error");
     }
     res.redirect("/dashboard");
   }
 );
 
 app.get("/auth/logout", (req, res) => {
-  req.session = null; // clears cookie-session cookie
+  clearAuthCookie(res);
   res.redirect("/login");
 });
 
@@ -119,19 +156,19 @@ app.get("/dashboard", requireAuth, (req, res) => {
 app.get("/api/session", requireAuth, (req, res) => {
   const mp = getMPUser(req);
   res.json({
-    name:            mp?.name || "MP",
-    email:           mp?.email || "",
-    avatar:          mp?.avatar || null,
-    constituency_id: mp?.constituency_id || "KA-BLR-NORTH-01",
-    auth_method:     mp?.auth_method || "google",
-    maps_api_key:    process.env.MAPS_API_KEY || "",
+    name:                 mp?.name || "MP",
+    email:                mp?.email || "",
+    avatar:               mp?.avatar || null,
+    constituency_id:      mp?.constituency_id || "KA-BLR-NORTH-01",
+    auth_method:          "google",
+    maps_api_key:         process.env.MAPS_API_KEY || "",
     google_oauth_enabled: true,
   });
 });
 
 // ── API Proxy helpers ─────────────────────────────────────────────────
 function authHeader(req) {
-  return { Authorization: `Bearer ${req.session.apiToken || ""}` };
+  return { Authorization: `Bearer ${req.authToken || ""}` };
 }
 
 async function proxyGet(req, apiPath, params = {}) {
@@ -149,8 +186,8 @@ async function proxyPost(req, apiPath, body = {}) {
   return data;
 }
 
-function apiRoute(method, path, handler) {
-  app[method](path, requireAuth, async (req, res) => {
+function apiRoute(method, routePath, handler) {
+  app[method](routePath, requireAuth, async (req, res) => {
     try { res.json(await handler(req)); }
     catch (e) { res.status(e.response?.status || 500).json({ error: e.message }); }
   });
@@ -231,14 +268,14 @@ apiRoute("get", "/api/users", async (req) => {
 
 // ── Database control ──────────────────────────────────────────────────
 apiRoute("get", "/api/db/status", async () => ({
-  instance: "janmat-db-poc",
-  status: "RUNNABLE",
-  tier: "db-f1-micro",
-  region: "asia-south1",
+  instance:     "janmat-db-poc",
+  status:       "RUNNABLE",
+  tier:         "db-f1-micro",
+  region:       "asia-south1",
   auto_stop:    "11:00 PM IST (17:30 UTC)",
   auto_start:   "7:00 AM IST (01:30 UTC)",
-  disk_gb: 10,
-  connections: 3,
+  disk_gb:      10,
+  connections:  3,
   cost_day_usd: 0.24,
 }));
 
