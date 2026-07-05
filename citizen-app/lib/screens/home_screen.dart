@@ -4,7 +4,6 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
-import 'submit_screen.dart';
 import 'audio_screen.dart';
 import 'text_screen.dart';
 import 'image_screen.dart';
