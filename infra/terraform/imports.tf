@@ -74,7 +74,7 @@ import {
 
 import {
   to = google_sql_user.janmat_user
-  id = "projects/${var.project_id}/instances/janmat-db-poc/users/janmat_user"
+  id = "${var.project_id}/janmat-db-poc/janmat_user"
 }
 
 # ── Cloud Scheduler ──────────────────────────────────────────────────────────

@@ -105,7 +105,7 @@ jobs:
           echo "── Cloud SQL ──"
           try_import google_sql_database_instance.janmat_db "projects/$P/instances/janmat-db-poc"
           try_import google_sql_database.janmat             "projects/$P/instances/janmat-db-poc/databases/janmat"
-          try_import google_sql_user.janmat_user            "projects/$P/instances/janmat-db-poc/users/janmat_user"
+          try_import google_sql_user.janmat_user            "$P/janmat-db-poc/janmat_user"
 
           echo "── Cloud Scheduler ──"
           try_import google_cloud_scheduler_job.stop_db "projects/$P/locations/asia-south1/jobs/janmat-stop-db"

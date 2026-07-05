@@ -152,9 +152,11 @@ resource "google_cloud_run_v2_service" "backend" {
   ]
 
   lifecycle {
-    # Don't redeploy if only the image tag changes (CI/CD handles that)
+    # CI/CD deploy workflow manages image, env vars, and scaling — Terraform must not touch them
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].containers[0].env,
+      template[0].scaling,
     ]
   }
 }
