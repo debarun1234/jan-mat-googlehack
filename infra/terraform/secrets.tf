@@ -32,6 +32,23 @@ resource "google_secret_manager_secret" "jwt_secret" {
   depends_on = [google_project_service.apis]
 }
 
+# Google OAuth credentials for MP Dashboard
+resource "google_secret_manager_secret" "google_client_id" {
+  secret_id = "janmat-google-client-id"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret" "google_client_secret" {
+  secret_id = "janmat-google-client-secret"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis]
+}
+
 # db_url secret is created in database.tf (has the actual value from Terraform)
 
 # ─────────────────────────────────────────
@@ -44,3 +61,7 @@ resource "google_secret_manager_secret" "jwt_secret" {
 #
 # JWT secret:
 #   openssl rand -hex 32 | gcloud secrets versions add janmat-jwt-secret --data-file=-
+#
+# Google OAuth:
+#   echo -n "CLIENT_ID" | gcloud secrets versions add janmat-google-client-id --data-file=-
+#   echo -n "CLIENT_SECRET" | gcloud secrets versions add janmat-google-client-secret --data-file=-
