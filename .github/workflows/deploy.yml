@@ -40,7 +40,13 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
-          flags: --min-instances=0 --max-instances=5 --memory=512Mi --cpu=1 --timeout=300
+          flags: >-
+            --min-instances=0
+            --max-instances=5
+            --memory=512Mi
+            --cpu=1
+            --timeout=300
+            --update-env-vars=JANMAT_ETL_URL=https://janmat-etl-w2w3osjaua-el.a.run.app
       - name: Smoke test
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}/health" --max-time 30)

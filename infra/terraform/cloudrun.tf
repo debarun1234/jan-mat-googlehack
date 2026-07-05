@@ -109,6 +109,10 @@ resource "google_cloud_run_v2_service" "backend" {
         name  = "CONSTITUENCY_ID"
         value = var.constituency_id
       }
+      env {
+        name  = "JANMAT_ETL_URL"
+        value = google_cloud_run_v2_service.etl.uri
+      }
 
       # Sensitive values from Secret Manager
       env {
@@ -288,4 +292,112 @@ resource "google_secret_manager_secret_iam_member" "dashboard_google_client_secr
   secret_id = google_secret_manager_secret.google_client_secret.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.backend.email}"
+}
+
+# ─────────────────────────────────────────
+# Cloud Run — ETL Pipeline Service
+# ─────────────────────────────────────────
+resource "google_cloud_run_v2_service" "etl" {
+  name     = "janmat-etl"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    service_account = google_service_account.backend.email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    containers {
+      image = "us-docker.pkg.dev/cloudrun/container/hello:latest"
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
+        cpu_idle = true
+      }
+
+      ports {
+        container_port = 8000
+      }
+
+      env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+      env {
+        name  = "GCP_REGION"
+        value = var.region
+      }
+      env {
+        name  = "GCS_BUCKET"
+        value = google_storage_bucket.media.name
+      }
+      env {
+        name  = "GCS_UPLOAD_FOLDER"
+        value = "uploads"
+      }
+      env {
+        name  = "BIGQUERY_DATASET"
+        value = google_bigquery_dataset.analytics.dataset_id
+      }
+      env {
+        name  = "BIGQUERY_TABLE_GRIEVANCES"
+        value = "citizen_grievances"
+      }
+      env {
+        name  = "BIGQUERY_TABLE_AUDIT"
+        value = "pipeline_audit"
+      }
+      env {
+        name  = "PUBSUB_TOPIC_SUBMISSIONS"
+        value = google_pubsub_topic.grievance_submitted.name
+      }
+      env {
+        name  = "PUBSUB_TOPIC_DLQ"
+        value = google_pubsub_topic.grievance_dlq.name
+      }
+      env {
+        name  = "PUBSUB_SUBSCRIPTION"
+        value = "grievance-processor-sub"
+      }
+      env {
+        name  = "GEMINI_MODEL"
+        value = var.gemini_model
+      }
+      env {
+        name  = "ENVIRONMENT"
+        value = "production"
+      }
+      env {
+        name  = "DEBUG"
+        value = "false"
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.apis,
+    google_service_account.backend,
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
+  }
+}
+
+# ETL is called by the backend — no public access needed
+# Backend SA already has run.invoker via backend_roles
+resource "google_cloud_run_v2_service_iam_member" "etl_backend_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.etl.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.backend.email}"
 }

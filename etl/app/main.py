@@ -286,6 +286,49 @@ def register_routes():
         }
 
 
+# Pub/Sub push endpoint — receives messages from grievance-processor-push-sub
+@app.post("/api/v1/pubsub/push")
+async def pubsub_push(request: Request):
+    """
+    Receives Pub/Sub push messages from the grievance-submitted topic.
+    Payload is a standard Pub/Sub push message:
+      { "message": { "data": "<base64>", "messageId": "...", "attributes": {...} },
+        "subscription": "projects/.../subscriptions/..." }
+    """
+    import base64
+    import json as _json
+
+    body = await request.json()
+    msg = body.get("message", {})
+    raw = msg.get("data", "")
+    request_id = request.state.request_id
+
+    try:
+        payload = _json.loads(base64.b64decode(raw).decode("utf-8")) if raw else {}
+    except Exception:
+        payload = {}
+
+    submission_id = payload.get("submission_id", "unknown")
+    input_type = payload.get("input_type", "unknown")
+    constituency_id = payload.get("constituency_id", "unknown")
+
+    logger.info(
+        f"Pub/Sub push received: submission_id={submission_id} "
+        f"type={input_type} constituency={constituency_id}",
+        request_id=request_id,
+    )
+    audit_logger.log_error(
+        request_id=request_id,
+        stage="pubsub_push",
+        error_code="INFO",
+        message=f"Received submission {submission_id} for ETL processing",
+    )
+
+    # TODO: invoke the full ETL pipeline for this submission
+    # For now acknowledge receipt — further processing is added iteratively
+    return {"status": "received", "submission_id": submission_id, "request_id": request_id}
+
+
 # Register routes on startup
 register_routes()
 
