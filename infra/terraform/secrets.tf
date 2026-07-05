@@ -32,6 +32,15 @@ resource "google_secret_manager_secret" "jwt_secret" {
   depends_on = [google_project_service.apis]
 }
 
+# Session secret for MP Dashboard (Node.js express-session)
+resource "google_secret_manager_secret" "session_secret" {
+  secret_id = "janmat-session-secret"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis]
+}
+
 # Google OAuth credentials for MP Dashboard
 resource "google_secret_manager_secret" "google_client_id" {
   secret_id = "janmat-google-client-id"
