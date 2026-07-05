@@ -39,27 +39,6 @@ jobs:
             --timeout 600s
           gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
 
-      - name: Write env vars file
-        run: |
-          cat > /tmp/etl-env.yaml <<'ENVEOF'
-            GCP_PROJECT_ID: "$PROJECT_ID"
-            GCP_REGION: "asia-south1"
-            GCS_BUCKET: "janmat-media-$PROJECT_ID"
-            GCS_UPLOAD_FOLDER: "uploads"
-            BIGQUERY_DATASET: "janmat_analytics"
-            BIGQUERY_TABLE_GRIEVANCES: "citizen_grievances"
-            BIGQUERY_TABLE_AUDIT: "pipeline_audit"
-            PUBSUB_TOPIC_SUBMISSIONS: "grievance-submitted"
-            PUBSUB_TOPIC_DLQ: "grievance-dlq"
-            PUBSUB_SUBSCRIPTION: "grievance-processor-sub"
-            GEMINI_MODEL: "gemini-2.5-flash-lite"
-            ENVIRONMENT: "production"
-            DEBUG: "false"
-            API_HOST: "0.0.0.0"
-            API_PORT: "8000"
-            ENVEOF
-          sed -i "s/\$PROJECT_ID/$PROJECT_ID/g" /tmp/etl-env.yaml
-
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
@@ -68,7 +47,22 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
-          env_vars_file: /tmp/etl-env.yaml
+          env_vars: |
+            GCP_PROJECT_ID=${{ env.PROJECT_ID }}
+            GCP_REGION=asia-south1
+            GCS_BUCKET=janmat-media-${{ env.PROJECT_ID }}
+            GCS_UPLOAD_FOLDER=uploads
+            BIGQUERY_DATASET=janmat_analytics
+            BIGQUERY_TABLE_GRIEVANCES=citizen_grievances
+            BIGQUERY_TABLE_AUDIT=pipeline_audit
+            PUBSUB_TOPIC_SUBMISSIONS=grievance-submitted
+            PUBSUB_TOPIC_DLQ=grievance-dlq
+            PUBSUB_SUBSCRIPTION=grievance-processor-sub
+            GEMINI_MODEL=gemini-2.5-flash-lite
+            ENVIRONMENT=production
+            DEBUG=false
+            API_HOST=0.0.0.0
+            API_PORT=8000
           flags: >-
             --port=8000
             --min-instances=0
