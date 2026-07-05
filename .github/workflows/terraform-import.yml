@@ -72,6 +72,10 @@ jobs:
           echo "── BigQuery ──"
           try_import google_bigquery_dataset.analytics      "$P/janmat_analytics"
           try_import google_bigquery_dataset.infrastructure "$P/janmat_infrastructure"
+          try_import google_bigquery_table.citizen_grievances   "$P/janmat_analytics/citizen_grievances"
+          try_import google_bigquery_table.demand_hotspots      "$P/janmat_analytics/demand_hotspots"
+          try_import google_bigquery_table.priority_scores      "$P/janmat_analytics/priority_scores"
+          try_import google_bigquery_table.public_infrastructure "$P/janmat_infrastructure/public_infrastructure"
 
           echo "── Secret Manager ──"
           try_import google_secret_manager_secret.db_url               "projects/$P/secrets/janmat-db-url"
@@ -94,13 +98,22 @@ jobs:
           try_import google_service_account.github_ci "projects/$P/serviceAccounts/janmat-github-ci@$P.iam.gserviceaccount.com"
 
           echo "── Networking ──"
-          try_import google_compute_network.janmat_vpc "projects/$P/global/networks/janmat-vpc"
+          try_import google_compute_network.janmat_vpc            "projects/$P/global/networks/janmat-vpc"
+          try_import google_compute_subnetwork.janmat_subnet      "projects/$P/regions/asia-south1/subnetworks/janmat-subnet"
+          try_import google_compute_global_address.private_ip_range "projects/$P/global/addresses/janmat-private-ip-range"
+          try_import google_vpc_access_connector.janmat_connector "projects/$P/locations/asia-south1/connectors/janmat-connector"
+          try_import google_compute_firewall.allow_internal        "projects/$P/global/firewalls/janmat-allow-internal"
+          try_import google_compute_firewall.deny_ingress          "projects/$P/global/firewalls/janmat-deny-ingress"
 
           echo "── Pub/Sub ──"
-          try_import google_pubsub_topic.grievance_submitted "projects/$P/topics/grievance-submitted"
-          try_import google_pubsub_topic.processing_complete "projects/$P/topics/processing-complete"
-          try_import google_pubsub_topic.priority_updated    "projects/$P/topics/priority-updated"
-          try_import google_pubsub_topic.grievance_dlq       "projects/$P/topics/grievance-dlq"
+          try_import google_pubsub_topic.grievance_submitted          "projects/$P/topics/grievance-submitted"
+          try_import google_pubsub_topic.processing_complete          "projects/$P/topics/processing-complete"
+          try_import google_pubsub_topic.priority_updated             "projects/$P/topics/priority-updated"
+          try_import google_pubsub_topic.grievance_dlq                "projects/$P/topics/grievance-dlq"
+          try_import google_pubsub_subscription.grievance_processor   "projects/$P/subscriptions/grievance-processor-sub"
+          try_import google_pubsub_subscription.analytics_trigger     "projects/$P/subscriptions/analytics-trigger-sub"
+          try_import google_pubsub_subscription.dashboard_refresh     "projects/$P/subscriptions/dashboard-refresh-sub"
+          try_import google_pubsub_subscription.grievance_dlq_sub     "projects/$P/subscriptions/grievance-dlq-sub"
 
       - name: Show final state summary
         run: |
