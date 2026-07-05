@@ -53,6 +53,17 @@ jobs:
             --timeout 600s
           gcloud container images add-tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" --quiet
 
+      # Use env-vars-file to avoid comma conflicts in ALLOWED_MP_EMAILS
+      - name: Write env vars file
+        run: |
+          cat > /tmp/dashboard-env.yaml << 'EOF'
+          JANMAT_API_URL: "https://janmat-backend-w2w3osjaua-el.a.run.app"
+          ALLOWED_MP_EMAILS: "quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo"
+          DEMO_USER: "mp@janmat.demo"
+          DEMO_PASS: "JanMat@2025!"
+          NODE_ENV: "production"
+          EOF
+
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
@@ -61,20 +72,17 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
           project_id: ${{ env.PROJECT_ID }}
+          env_vars_file: /tmp/dashboard-env.yaml
+          secrets: |
+            SESSION_SECRET=janmat-session-secret:latest
+            GOOGLE_CLIENT_ID=janmat-google-client-id:latest
+            GOOGLE_CLIENT_SECRET=janmat-google-client-secret:latest
           flags: >-
             --min-instances=0
             --max-instances=2
             --memory=256Mi
             --cpu=1
             --timeout=60
-            --set-env-vars=JANMAT_API_URL=https://janmat-backend-w2w3osjaua-el.a.run.app
-            --set-env-vars=ALLOWED_MP_EMAILS=quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo
-            --set-env-vars=DEMO_USER=mp@janmat.demo
-            --set-env-vars=DEMO_PASS=JanMat@2025!
-            --set-env-vars=NODE_ENV=production
-            --set-secrets=SESSION_SECRET=janmat-session-secret:latest
-            --set-secrets=GOOGLE_CLIENT_ID=janmat-google-client-id:latest
-            --set-secrets=GOOGLE_CLIENT_SECRET=janmat-google-client-secret:latest
 
       - name: Print dashboard URL
         run: |
