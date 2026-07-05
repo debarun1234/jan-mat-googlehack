@@ -33,27 +33,59 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # ── ETL Pipeline Service ─────────────────────────────────────────────
+  etl:
+    build:
+      context: ./etl
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - GCP_PROJECT_ID=project-f0fb8de7-7240-4128-965
+      - GCP_REGION=asia-south1
+      - GCS_BUCKET=janmat-media-local
+      - GCS_UPLOAD_FOLDER=uploads
+      - BIGQUERY_DATASET=janmat_analytics
+      - BIGQUERY_TABLE_GRIEVANCES=citizen_grievances
+      - BIGQUERY_TABLE_AUDIT=pipeline_audit
+      - PUBSUB_TOPIC_SUBMISSIONS=grievance-submitted
+      - PUBSUB_TOPIC_DLQ=grievance-dlq
+      - PUBSUB_SUBSCRIPTION=grievance-processor-sub
+      - GEMINI_MODEL=gemini-2.5-flash-lite
+      - DEBUG=true
+      - ENVIRONMENT=development
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
   # ── MP Dashboard (Node.js) ───────────────────────────────────────────
   dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:8080"
     environment:
-      - PORT=3000
+      - PORT=8080
       - JANMAT_API_URL=http://backend:8080
+      - JANMAT_ETL_URL=http://etl:8000
       - DEMO_MODE=true
       - SESSION_SECRET=dev-session-secret-local
-      - ALLOWED_MP_EMAILS=quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo
+      - ALLOWED_MP_EMAILS=*
       - DEMO_USER=mp@janmat.demo
       - DEMO_PASS=JanMat@2025!
-      # Google OAuth — set in .env file (see .env.example)
+      # Google OAuth — set in .env file
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
     depends_on:
       - backend
+      - etl
     restart: unless-stopped
 
   # ── Local PostgreSQL (mirrors Cloud SQL schema) ──────────────────────

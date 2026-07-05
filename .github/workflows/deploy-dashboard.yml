@@ -58,7 +58,7 @@ jobs:
         run: |
           cat > /tmp/dashboard-env.yaml << 'EOF'
           JANMAT_API_URL: "https://janmat-backend-w2w3osjaua-el.a.run.app"
-          ALLOWED_MP_EMAILS: "quantumduobuilder@gmail.com,richardjoy9946@gmail.com,mp@janmat.demo"
+          ALLOWED_MP_EMAILS: "*"
           DEMO_USER: "mp@janmat.demo"
           DEMO_PASS: "JanMat@2025!"
           NODE_ENV: "production"
