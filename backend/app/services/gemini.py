@@ -187,7 +187,7 @@ class GeminiService:
         settings = get_settings()
         vertexai.init(
             project=settings.gcp_project_id,
-            location=settings.gcp_region,
+            location=settings.gemini_region,  # us-central1 — Gemini models are not available in asia-south1
         )
         self._model_name = settings.gemini_model
         self._model: GenerativeModel | None = None
