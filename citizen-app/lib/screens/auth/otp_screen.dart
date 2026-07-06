@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../main.dart';
 import '../../theme.dart';
 import '../../services/auth_service.dart';
@@ -36,22 +37,32 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _verify() async {
     if (_otp.length != 6) return;
+    if (_verificationId == null) {
+      setState(() { _error = 'Session expired. Go back and resend OTP.'; });
+      return;
+    }
     setState(() { _loading = true; _error = null; });
     try {
-      final auth = AuthService();
-      final uc   = await auth.verifyOtp(_otp);
-      final uid  = uc.user?.uid ?? '';
-      final tok  = await uc.user?.getIdToken() ?? '';
-      final ph   = uc.user?.phoneNumber ?? _phone ?? '';
+      final cred = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: _otp,
+      );
+      final uc  = await FirebaseAuth.instance.signInWithCredential(cred);
+      final uid = uc.user?.uid ?? '';
+      final tok = await uc.user?.getIdToken() ?? '';
+      final ph  = uc.user?.phoneNumber ?? _phone ?? '';
       await _handlePostAuth(uid, tok, ph);
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString().contains('invalid-verification-code')
+        _error = e.code == 'invalid-verification-code'
           ? 'Incorrect OTP. Please try again.'
-          : 'Verification failed. Try again.';
+          : '[${e.code}] ${e.message ?? 'Verification failed'}';
       });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.toString(); });
     }
   }
 

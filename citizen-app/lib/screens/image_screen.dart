@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import '../services/location_service.dart';
 
 class ImageScreen extends StatefulWidget {
   const ImageScreen({super.key});
@@ -32,13 +34,35 @@ class _ImageScreenState extends State<ImageScreen> {
   Future<void> _submit() async {
     if (_image == null) return;
     setState(() { _submitting = true; _error = null; });
+
+    final loc = await LocationService.getLocation();
+    if (!loc.hasLocation) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        await _showLocationError(context, loc);
+      }
+      return;
+    }
+
     final app = context.read<AppState>();
     try {
       final svc = ApiService();
-      final res = await svc.submitImage(_image!, description: _descCtrl.text.trim(), token: app.token);
+      final res = await svc.submitImage(
+        _image!,
+        description: _descCtrl.text.trim(),
+        token: app.token,
+        lat: loc.lat,
+        lng: loc.lng,
+      );
       if (mounted) setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+    } on DioException catch (e) {
+      final detail = (e.response?.data as Map?)?['detail']?.toString()
+          ?? e.message ?? 'Submission failed';
+      debugPrint('[JanMat Image] ${e.response?.statusCode}: $detail');
+      if (mounted) setState(() { _error = detail; _submitting = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = 'Submission failed. Please try again.'; _submitting = false; });
+      debugPrint('[JanMat Image] $e');
+      if (mounted) setState(() { _error = e.toString(); _submitting = false; });
     }
   }
 
@@ -116,6 +140,47 @@ class _ImageScreenState extends State<ImageScreen> {
       ),
     );
   }
+}
+
+Future<void> _showLocationError(BuildContext context, LocationResult loc) {
+  return showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF111827),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(children: [
+        Icon(Icons.location_off_rounded, color: Color(0xFFFF4D6D)),
+        SizedBox(width: 10),
+        Text('Location Required', style: TextStyle(color: Colors.white, fontSize: 17)),
+      ]),
+      content: Text(
+        loc.errorMessage ?? 'Location is required to submit a concern.',
+        style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14, height: 1.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel', style: TextStyle(color: Color(0xFF9CA3AF))),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F8EF7)),
+          onPressed: () async {
+            Navigator.pop(ctx);
+            if (loc.isPermanentlyDenied) {
+              await LocationService.openAppSettings();
+            } else {
+              await LocationService.openLocationSettings();
+            }
+          },
+          child: Text(
+            loc.isPermanentlyDenied ? 'Open App Settings' : 'Enable Location',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Header extends StatelessWidget {

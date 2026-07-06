@@ -31,6 +31,52 @@ from app.config import get_settings
 log = structlog.get_logger()
 
 
+def _vertex_schema(schema: dict) -> dict:
+    """
+    Convert a Pydantic-generated JSON schema to a Vertex AI-compatible schema.
+
+    Vertex AI rejects:
+      - type: "null"  (Pydantic v2 emits anyOf: [{type: X}, {type: null}] for Optional fields)
+      - $ref / $defs  (Vertex AI does not resolve JSON Schema references)
+
+    This function:
+      1. Inlines all $ref references from $defs
+      2. Rewrites anyOf: [{type: X}, {type: null}]  →  {type: X, nullable: true}
+      3. Strips noisy keys: title, default, $defs, $schema
+    """
+    defs: dict = schema.get("$defs", {})
+    _STRIP = {"title", "default", "$defs", "$schema"}
+
+    def _inline(node: dict) -> dict:
+        if "$ref" not in node:
+            return node
+        name = node["$ref"].rsplit("/", 1)[-1]
+        resolved = dict(defs.get(name, {}))
+        resolved.update({k: v for k, v in node.items() if k != "$ref"})
+        return resolved
+
+    def _walk(node):
+        if isinstance(node, list):
+            return [_walk(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+
+        node = _inline(node)
+
+        if "anyOf" in node:
+            non_null = [p for p in node["anyOf"] if p.get("type") != "null"]
+            has_null = len(non_null) < len(node["anyOf"])
+            rest = {k: v for k, v in node.items() if k not in ("anyOf", *_STRIP)}
+            if has_null and len(non_null) == 1:
+                return _walk({**non_null[0], **rest, "nullable": True})
+            node = {**rest, "anyOf": [_walk(p) for p in non_null]}
+            return node
+
+        return {k: _walk(v) for k, v in node.items() if k not in _STRIP}
+
+    return _walk(schema)
+
+
 # ── Output schema — Gemini MUST return exactly this ──────────────────
 
 
@@ -172,7 +218,7 @@ class GeminiService:
             top_p=1.0,
             max_output_tokens=512,
             response_mime_type="application/json",
-            response_schema=StructuredGrievance.model_json_schema(),
+            response_schema=_vertex_schema(StructuredGrievance.model_json_schema()),
         )
 
     @retry(
@@ -371,7 +417,7 @@ Return JSON with:
                 temperature=0.0,
                 max_output_tokens=512,
                 response_mime_type="application/json",
-                response_schema=CompletionVerification.model_json_schema(),
+                response_schema=_vertex_schema(CompletionVerification.model_json_schema()),
             ),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)

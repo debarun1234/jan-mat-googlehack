@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import 'audio_screen.dart';
 import 'text_screen.dart';
 import 'image_screen.dart';
+import 'about_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -97,7 +98,7 @@ class _HeroHeader extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Text('JanMat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
                 const Spacer(),
-                _ProfileChip(name: name),
+                _ProfileChip(name: name, profile: profile),
               ]),
               const SizedBox(height: 20),
               Text('$greeting,', style: const TextStyle(color: Colors.white70, fontSize: 14)),
@@ -125,7 +126,8 @@ class _HeroHeader extends StatelessWidget {
 
 class _ProfileChip extends StatelessWidget {
   final String name;
-  const _ProfileChip({required this.name});
+  final UserProfile? profile;
+  const _ProfileChip({required this.name, this.profile});
 
   @override
   Widget build(BuildContext context) {
@@ -160,13 +162,56 @@ class _ProfileChip extends StatelessWidget {
       backgroundColor: JanMatTheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 40, height: 4, decoration: BoxDecoration(color: JanMatTheme.border, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 20),
-          const Text('Account', style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
+          // Avatar + name
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: JanMatTheme.primary.withValues(alpha: 0.15),
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : 'C',
+              style: const TextStyle(color: JanMatTheme.primary, fontSize: 26, fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(name, style: const TextStyle(color: JanMatTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          if (profile?.phoneNumber != null && profile!.phoneNumber.isNotEmpty)
+            Text(profile!.phoneNumber, style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 13)),
+          const SizedBox(height: 16),
+          // Info tiles
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(color: JanMatTheme.card, borderRadius: BorderRadius.circular(12)),
+            child: Column(children: [
+              if (profile?.city != null || profile?.state != null)
+                _InfoRow(icon: Icons.location_city_rounded, label: 'Location',
+                  value: [profile?.city, profile?.state].where((e) => e != null && e.isNotEmpty).join(', ')),
+              if (profile?.pinCode != null)
+                _InfoRow(icon: Icons.pin_drop_rounded, label: 'PIN Code', value: profile!.pinCode!),
+              if (profile?.constituencyId != null)
+                _InfoRow(icon: Icons.how_to_vote_rounded, label: 'Constituency', value: profile!.constituencyId!),
+              _InfoRow(icon: Icons.campaign_rounded, label: 'Submissions', value: '${profile?.submissionCount ?? 0}'),
+            ]),
+          ),
+          const SizedBox(height: 16),
           ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            tileColor: JanMatTheme.card,
+            leading: const Icon(Icons.info_outline_rounded, color: JanMatTheme.primary),
+            title: const Text('About JanMat', style: TextStyle(color: JanMatTheme.textPrimary, fontWeight: FontWeight.w600)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: JanMatTheme.textMuted, size: 18),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()));
+            },
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            tileColor: JanMatTheme.errorColor.withValues(alpha: 0.08),
             leading: const Icon(Icons.logout_rounded, color: JanMatTheme.errorColor),
             title: const Text('Sign Out', style: TextStyle(color: JanMatTheme.errorColor, fontWeight: FontWeight.w600)),
             onTap: () async {
@@ -176,9 +221,29 @@ class _ProfileChip extends StatelessWidget {
               if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/phone', (_) => false);
             },
           ),
-          const SizedBox(height: 12),
         ]),
       ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(children: [
+        Icon(icon, color: JanMatTheme.primary, size: 18),
+        const SizedBox(width: 12),
+        Text(label, style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 13)),
+        const Spacer(),
+        Text(value, style: const TextStyle(color: JanMatTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 }

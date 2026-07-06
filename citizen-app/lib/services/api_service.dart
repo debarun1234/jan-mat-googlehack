@@ -36,49 +36,49 @@ class ApiService {
   }
 
   // ── Text submission ────────────────────────────────────────────────
-  Future<Map<String, dynamic>> submitText(String text, {String? token}) async {
+  Future<Map<String, dynamic>> submitText(String text, {String? token, double? lat, double? lng}) async {
     final r = await _dio.post(
       '/intake/text',
-      data: {'text': text},
+      data: {
+        'text': text,
+        if (lat != null) 'latitude': lat,
+        if (lng != null) 'longitude': lng,
+      },
       options: _auth(token),
     );
     return Map<String, dynamic>.from(r.data);
   }
 
   // ── Audio submission ───────────────────────────────────────────────
-  Future<Map<String, dynamic>> submitAudio(String filePath, {String? token}) async {
+  // Backend field: audio_file (not audio). Content-Type must be audio/mp4 for .m4a files.
+  Future<Map<String, dynamic>> submitAudio(String filePath, {String? token, double? lat, double? lng}) async {
     final form = FormData.fromMap({
-      'audio': await MultipartFile.fromFile(filePath, filename: 'audio.m4a'),
-    });
-    final r = await _dio.post(
-      '/intake/audio',
-      data: form,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
+      'audio_file': await MultipartFile.fromFile(
+        filePath,
+        filename: 'audio.m4a',
+        contentType: DioMediaType('audio', 'mp4'),
       ),
-    );
+      if (lat != null) 'latitude': lat.toString(),
+      if (lng != null) 'longitude': lng.toString(),
+    });
+    final r = await _dio.post('/intake/audio', data: form, options: _auth(token));
     return Map<String, dynamic>.from(r.data);
   }
 
   // ── Image submission ───────────────────────────────────────────────
-  Future<Map<String, dynamic>> submitImage(File file, {String? description, String? token}) async {
+  // Backend field: image_file (not image), caption (not description).
+  Future<Map<String, dynamic>> submitImage(File file, {String? description, String? token, double? lat, double? lng}) async {
     final form = FormData.fromMap({
-      'image': await MultipartFile.fromFile(file.path, filename: 'photo.jpg'),
-      if (description != null && description.isNotEmpty) 'description': description,
-    });
-    final r = await _dio.post(
-      '/intake/image',
-      data: form,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
+      'image_file': await MultipartFile.fromFile(
+        file.path,
+        filename: 'photo.jpg',
+        contentType: DioMediaType('image', 'jpeg'),
       ),
-    );
+      if (description != null && description.isNotEmpty) 'caption': description,
+      if (lat != null) 'latitude': lat.toString(),
+      if (lng != null) 'longitude': lng.toString(),
+    });
+    final r = await _dio.post('/intake/image', data: form, options: _auth(token));
     return Map<String, dynamic>.from(r.data);
   }
 

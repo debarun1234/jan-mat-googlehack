@@ -21,7 +21,7 @@ dependencies:
   google_maps_flutter: ^2.9.0
 
   # Audio recording
-  record: ^5.1.2
+  record: ^7.1.1
   path_provider: ^2.1.4
 
   # Image picking

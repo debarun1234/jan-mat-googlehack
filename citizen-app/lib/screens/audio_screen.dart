@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import '../services/location_service.dart';
 
 class AudioScreen extends StatefulWidget {
   const AudioScreen({super.key});
@@ -71,13 +73,29 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
   Future<void> _submit() async {
     if (_filePath == null) return;
     setState(() { _submitting = true; _error = null; });
+
+    final loc = await LocationService.getLocation();
+    if (!loc.hasLocation) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        await _showLocationError(context, loc);
+      }
+      return;
+    }
+
     final app = context.read<AppState>();
     try {
       final svc = ApiService();
-      final res = await svc.submitAudio(_filePath!, token: app.token);
+      final res = await svc.submitAudio(_filePath!, token: app.token, lat: loc.lat, lng: loc.lng);
       if (mounted) setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+    } on DioException catch (e) {
+      final detail = (e.response?.data as Map?)?['detail']?.toString()
+          ?? e.message ?? 'Submission failed';
+      debugPrint('[JanMat Audio] ${e.response?.statusCode}: $detail');
+      if (mounted) setState(() { _error = detail; _submitting = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = 'Submission failed. Please try again.'; _submitting = false; });
+      debugPrint('[JanMat Audio] $e');
+      if (mounted) setState(() { _error = e.toString(); _submitting = false; });
     }
   }
 
@@ -104,10 +122,10 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(children: [
-            const Spacer(),
+            const SizedBox(height: 24),
             // Timer
             Text(_fmtDuration(_elapsed), style: const TextStyle(color: JanMatTheme.textPrimary, fontSize: 56, fontWeight: FontWeight.w200, letterSpacing: 2)),
             const SizedBox(height: 8),
@@ -115,7 +133,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
               _recording ? 'Recording...' : (_hasRecording ? 'Recording complete' : 'Tap to record'),
               style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 14),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 36),
             // Pulse rings + mic button
             SizedBox(
               width: 200, height: 200,
@@ -166,19 +184,21 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
                 ),
               ]),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 36),
             // Action buttons
             if (_hasRecording && _result == null) ...[
               JMButton(label: 'Submit Recording', loading: _submitting, icon: Icons.send_rounded, onPressed: _submitting ? null : _submit),
               const SizedBox(height: 12),
               JMButton(label: 'Discard & Re-record', outlined: true, onPressed: _discard),
+              const SizedBox(height: 12),
             ],
             if (_result != null) ...[
               _SuccessBanner(submissionId: _result!),
               const SizedBox(height: 16),
               JMButton(label: 'Submit Another', outlined: true, onPressed: _discard),
+              const SizedBox(height: 12),
             ],
-            if (_error != null)
+            if (_error != null) ...[
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: JanMatTheme.errorColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: JanMatTheme.errorColor.withValues(alpha: 0.3))),
@@ -188,7 +208,9 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
                   Expanded(child: Text(_error!, style: const TextStyle(color: JanMatTheme.errorColor, fontSize: 13))),
                 ]),
               ),
-            const Spacer(),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 8),
             const _LanguageNote(),
             const SizedBox(height: 16),
           ]),
@@ -196,6 +218,47 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
       ),
     );
   }
+}
+
+Future<void> _showLocationError(BuildContext context, LocationResult loc) {
+  return showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF111827),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(children: [
+        Icon(Icons.location_off_rounded, color: Color(0xFFFF4D6D)),
+        SizedBox(width: 10),
+        Text('Location Required', style: TextStyle(color: Colors.white, fontSize: 17)),
+      ]),
+      content: Text(
+        loc.errorMessage ?? 'Location is required to submit a concern.',
+        style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14, height: 1.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel', style: TextStyle(color: Color(0xFF9CA3AF))),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F8EF7)),
+          onPressed: () async {
+            Navigator.pop(ctx);
+            if (loc.isPermanentlyDenied) {
+              await LocationService.openAppSettings();
+            } else {
+              await LocationService.openLocationSettings();
+            }
+          },
+          child: Text(
+            loc.isPermanentlyDenied ? 'Open App Settings' : 'Enable Location',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SuccessBanner extends StatelessWidget {
@@ -234,10 +297,14 @@ class _LanguageNote extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: JanMatTheme.border),
       ),
-      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      child: const Row(children: [
         Icon(Icons.translate_rounded, color: JanMatTheme.primary, size: 16),
         SizedBox(width: 8),
-        Text('Supports Hindi, Kannada, Tamil, Telugu, Bengali & English', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
+        Flexible(child: Text(
+          'Supports Hindi, Kannada, Tamil, Telugu, Bengali & English',
+          style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+        )),
       ]),
     );
   }

@@ -32,6 +32,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
     await auth.verifyPhone(
       phoneNumber: fullNumber,
       onCodeSent: (verificationId, _) {
+        debugPrint('[JanMat] OTP sent to $fullNumber, verificationId=$verificationId');
         if (!mounted) return;
         setState(() => _loading = false);
         Navigator.pushNamed(context, '/otp', arguments: {
@@ -40,8 +41,9 @@ class _PhoneScreenState extends State<PhoneScreen> {
         });
       },
       onError: (e) {
+        debugPrint('[JanMat] Firebase Phone Auth ERROR: code=${e.code} message=${e.message}');
         if (!mounted) return;
-        setState(() { _loading = false; _error = e.message ?? 'Failed to send OTP. Try again.'; });
+        setState(() { _loading = false; _error = '[${e.code}] ${e.message ?? 'Failed to send OTP'}'; });
       },
       onAutoVerified: (cred) async {
         if (!mounted) return;
