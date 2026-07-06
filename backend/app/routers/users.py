@@ -204,7 +204,14 @@ async def firebase_auth(
             raise HTTPException(status_code=401, detail="Token UID mismatch")
 
     # Create or update user record
-    user = await _get_user(firebase_uid)
+    try:
+        user = await _get_user(firebase_uid)
+    except Exception as e:
+        log.error("firestore_get_user_failed", error=str(e), firebase_uid=firebase_uid)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {type(e).__name__}: {str(e)}"
+        )
     if user is None:
         user_id = str(uuid.uuid4())
         user = {
@@ -221,14 +228,21 @@ async def firebase_auth(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "profile_complete": False,
         }
-        await _set_user(firebase_uid, user)
+        try:
+            await _set_user(firebase_uid, user)
+        except Exception as e:
+            log.error("firestore_set_user_failed", error=str(e))
+            raise HTTPException(status_code=500, detail=f"Database error: {type(e).__name__}: {str(e)}")
         log.info(
             "user_created",
             firebase_uid=firebase_uid,
             phone=request.phone_number[:6] + "****",
         )
     else:
-        await _update_user(firebase_uid, {"last_login_at": datetime.now(timezone.utc).isoformat()})
+        try:
+            await _update_user(firebase_uid, {"last_login_at": datetime.now(timezone.utc).isoformat()})
+        except Exception as e:
+            log.warning("firestore_update_login_failed", error=str(e))  # non-fatal
 
     token = _make_user_jwt(
         user["user_id"],

@@ -43,7 +43,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
       onError: (e) {
         debugPrint('[JanMat] Firebase Phone Auth ERROR: code=${e.code} message=${e.message}');
         if (!mounted) return;
-        setState(() { _loading = false; _error = '[${e.code}] ${e.message ?? 'Failed to send OTP'}'; });
+        setState(() { _loading = false; _error = _friendlyAuthError(e.code); });
       },
       onAutoVerified: (cred) async {
         if (!mounted) return;
@@ -172,6 +172,23 @@ class _HeroPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+String _friendlyAuthError(String code) {
+  switch (code) {
+    case 'too-many-requests':
+      return 'Too many attempts from this device. Please wait a few hours and try again.';
+    case 'invalid-phone-number':
+      return 'Invalid phone number. Please include the country code (e.g. +91).';
+    case 'quota-exceeded':
+      return 'SMS quota exceeded. Please try again later.';
+    case 'network-request-failed':
+      return 'No internet connection. Please check your network and retry.';
+    case 'captcha-check-failed':
+      return 'Security check failed. Please restart the app and try again.';
+    default:
+      return 'Failed to send OTP ($code). Please try again.';
   }
 }
 
