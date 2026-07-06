@@ -2,19 +2,8 @@
 -- JanMat — Phase 2: Priority Scoring
 -- P = 0.6 × D (Demand Score) + 0.4 × G (Gap Index)
 -- ════════════════════════════════════════════════════════════════════
--- Cross-references demand hotspots against public_infrastructure
--- baseline data to produce a population-normalised priority ranking.
---
 -- Parameters:
 --   @constituency_id   STRING  — constituency to rank
---
--- Key design decisions:
---   - Population normalisation prevents dense urban wards from always
---     outranking underserved rural areas (core anti-bias mechanism)
---   - Gap Index computed per category from Census/NFHS benchmarks
---   - Formula weights: Demand 60%, Infrastructure Gap 40%
---
--- Output: rows matching priority_scores schema
 -- ════════════════════════════════════════════════════════════════════
 
 WITH
@@ -33,9 +22,7 @@ latest_hotspots AS (
     constituency_id,
     computed_at
   FROM `janmat_analytics.demand_hotspots`
-  WHERE
-    constituency_id = @constituency_id
-    -- Use only the most recent clustering run
+  WHERE constituency_id = @constituency_id
     AND DATE(computed_at) = (
       SELECT MAX(DATE(computed_at))
       FROM `janmat_analytics.demand_hotspots`
@@ -43,38 +30,30 @@ latest_hotspots AS (
     )
 ),
 
--- Infrastructure baseline facts per category
--- Gap Index = how far below national benchmark each category is
+-- Infrastructure baseline — wide-format columns from public_infrastructure table.
+-- Gap Index = how far below national benchmark (0 = no gap, 1 = severe gap).
+-- LEFT JOIN used so scoring still works when infra table has no data (defaults to 0.5).
 infra_baseline AS (
   SELECT
     constituency_id,
     category,
-    -- Aggregate all metrics for a category into a gap score 0..1
-    -- Higher = bigger gap vs. national norm
     AVG(
-      CASE
-        -- Education: gap = 1 if no school within 5km, 0 if within 1km
-        WHEN metric_name = 'primary_school_count'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 3.0))
-        WHEN metric_name = 'enrollment_rate_pct'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 95.0))
-        WHEN metric_name = 'avg_travel_distance_km'
-          THEN LEAST(1, SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 10.0))
-        -- Health: gap = inverse of beds per 1000, capped
-        WHEN metric_name = 'health_beds_per_1000'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 3.0))
-        -- Roads: gap = 1 - quality score
-        WHEN metric_name = 'road_quality_score'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 10.0))
-        WHEN metric_name = 'paved_road_coverage_pct'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 100.0))
-        -- Water: gap = inverse of piped access %
-        WHEN metric_name = 'piped_water_access_pct'
-          THEN GREATEST(0, 1 - SAFE_DIVIDE(CAST(metric_value AS FLOAT64), 100.0))
-        -- Sanitation: gap = 1 if not ODF
-        WHEN metric_name = 'open_defecation_free'
-          THEN CASE WHEN LOWER(metric_value) = 'yes' THEN 0.0 ELSE 1.0 END
-        -- Default: neutral gap
+      CASE category
+        WHEN 'Education' THEN
+          -- Low enrollment rate → high gap
+          GREATEST(0.0, 1.0 - COALESCE(school_enrollment_rate, 0.75))
+        WHEN 'Health' THEN
+          -- Few beds per 1000 → high gap (benchmark: 3.0 beds/1000)
+          GREATEST(0.0, 1.0 - COALESCE(SAFE_DIVIDE(hospital_beds_per_1000, 3.0), 0.5))
+        WHEN 'Roads' THEN
+          -- Low quality score → high gap
+          GREATEST(0.0, 1.0 - COALESCE(SAFE_DIVIDE(road_quality_score, 10.0), 0.5))
+        WHEN 'Water' THEN
+          -- Low piped access % → high gap
+          GREATEST(0.0, 1.0 - COALESCE(SAFE_DIVIDE(piped_water_access_pct, 100.0), 0.5))
+        WHEN 'Sanitation' THEN
+          -- Low sanitation coverage → high gap
+          GREATEST(0.0, 1.0 - COALESCE(SAFE_DIVIDE(sanitation_coverage_pct, 100.0), 0.5))
         ELSE 0.5
       END
     ) AS gap_index
@@ -87,11 +66,8 @@ infra_baseline AS (
 demand_scored AS (
   SELECT
     h.*,
-    -- Raw demand: volume weighted by urgency
-    (h.complaint_count * h.avg_urgency) AS raw_demand,
-    -- Population normalisation: per 1000 residents prevents urban bias
     SAFE_DIVIDE(h.complaint_count * h.avg_urgency, h.affected_population) * 1000 AS demand_per_1000,
-    COALESCE(ib.gap_index, 0.5) AS gap_index
+    COALESCE(ib.gap_index, 0.5) AS gap_index   -- defaults to 0.5 when no infra data
   FROM latest_hotspots h
   LEFT JOIN infra_baseline ib
     ON h.constituency_id = ib.constituency_id
@@ -106,18 +82,15 @@ demand_normalised AS (
   FROM demand_scored
 ),
 
--- Final priority score: P = 0.6 × D + 0.4 × G
+-- Final priority score: P = 0.6D + 0.4G
 scored AS (
   SELECT
-    GENERATE_UUID()     AS score_id,
+    GENERATE_UUID() AS score_id,
     hotspot_id,
     category,
     constituency_id,
-    -- D: normalised demand (0..1)
     ROUND(SAFE_DIVIDE(demand_per_1000, NULLIF(max_demand_per_1000, 0)), 4) AS demand_score,
-    -- G: infrastructure gap (0..1)
     ROUND(gap_index, 4) AS gap_index,
-    -- P = 0.6D + 0.4G scaled to 0..10
     ROUND(
       10 * (
         0.6 * SAFE_DIVIDE(demand_per_1000, NULLIF(max_demand_per_1000, 0))
@@ -143,7 +116,6 @@ SELECT
   demand_score,
   gap_index,
   priority_score,
-  -- Rank 1 = highest priority
   ROW_NUMBER() OVER (ORDER BY priority_score DESC) AS priority_rank,
   complaint_count,
   avg_urgency,
@@ -151,16 +123,16 @@ SELECT
   center_lat,
   center_lon,
   radius_km,
-  -- Human-readable project name
   CASE category
     WHEN 'Education'   THEN 'School Construction / Expansion'
     WHEN 'Health'      THEN 'Primary Health Centre Upgrade'
     WHEN 'Roads'       THEN 'Road Repair and Paving'
     WHEN 'Water'       THEN 'Piped Water Supply Extension'
     WHEN 'Sanitation'  THEN 'Sanitation and ODF Program'
+    WHEN 'Electricity' THEN 'Electricity Infrastructure Upgrade'
     ELSE CONCAT(category, ' Infrastructure Improvement')
   END AS suggested_project,
-  NULL AS evidence_log,
+  '' AS evidence_log,
   generated_at
 FROM scored
 ORDER BY priority_score DESC
