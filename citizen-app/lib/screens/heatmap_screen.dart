@@ -8,7 +8,8 @@ import '../theme.dart';
 import '../services/user_service.dart';
 
 class HeatmapScreen extends StatefulWidget {
-  const HeatmapScreen({super.key});
+  final String? initialCategory;
+  const HeatmapScreen({super.key, this.initialCategory});
   @override
   State<HeatmapScreen> createState() => _HeatmapScreenState();
 }
@@ -28,6 +29,10 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialCategory;
+    if (initial != null && _categories.contains(initial)) {
+      _selectedCategory = initial;
+    }
     _loadPinAndFetch();
   }
 

@@ -8,6 +8,7 @@ import 'audio_screen.dart';
 import 'text_screen.dart';
 import 'image_screen.dart';
 import 'about_screen.dart';
+import 'edit_profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -204,6 +205,18 @@ class _ProfileChip extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 16),
+          ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            tileColor: JanMatTheme.card,
+            leading: const Icon(Icons.edit_rounded, color: JanMatTheme.primary),
+            title: const Text('Edit Profile', style: TextStyle(color: JanMatTheme.textPrimary, fontWeight: FontWeight.w600)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: JanMatTheme.textMuted, size: 18),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+            },
+          ),
+          const SizedBox(height: 8),
           ListTile(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             tileColor: JanMatTheme.card,

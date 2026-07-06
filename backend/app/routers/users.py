@@ -211,6 +211,10 @@ async def firebase_auth(
         raise HTTPException(
             status_code=500, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
+    if user is not None and user.get("account_deleted"):
+        # Account was soft-deleted — treat as new user so OTP re-login creates a fresh account
+        user = None
+
     if user is None:
         user_id = str(uuid.uuid4())
         user = {
@@ -364,6 +368,55 @@ async def get_citizen_heatmap(
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.delete("/account", status_code=200)
+async def delete_account(
+    current_user: Annotated[dict, Depends(_get_current_user)],
+):
+    """
+    Soft-delete the citizen's account.
+
+    What happens:
+      - PII fields (name, phone, city, state, pin_code, town) are wiped from Firestore.
+      - The personal submissions subcollection (citizen's history view) is deleted.
+      - BigQuery `citizen_grievances` rows are intentionally KEPT — they are
+        already anonymised complaint data that drive MP priority decisions.
+        Deleting a citizen account must not remove community impact data.
+      - The Firestore user document is marked account_deleted=True so the UID
+        cannot be reused to re-authenticate into a ghost record.
+    """
+    firebase_uid = current_user["firebase_uid"]
+    db = _get_db()
+
+    # 1. Delete personal submissions subcollection (citizen's own history)
+    try:
+        sub_docs = await (
+            db.collection("janmat_users")
+            .document(firebase_uid)
+            .collection("submissions")
+            .get()
+        )
+        for doc in sub_docs:
+            await doc.reference.delete()
+    except Exception as e:
+        log.warning("delete_submissions_subcollection_failed", error=str(e))
+
+    # 2. Wipe PII but keep the shell record so the UID stays tombstoned
+    await _update_user(firebase_uid, {
+        "full_name":       None,
+        "phone_number":    "[deleted]",
+        "town":            None,
+        "city":            None,
+        "state":           None,
+        "pin_code":        None,
+        "profile_complete": False,
+        "account_deleted":  True,
+        "deleted_at":       datetime.now(timezone.utc).isoformat(),
+    })
+
+    log.info("user_account_soft_deleted", firebase_uid=firebase_uid)
+    return {"message": "Account deleted. Your anonymised submissions remain to support community development."}
 
 
 # ── Admin: list all users (MP only, accessed via dashboard) ──────────

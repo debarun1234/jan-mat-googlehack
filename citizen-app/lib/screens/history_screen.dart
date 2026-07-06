@@ -14,6 +14,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   String? _error;
+  String _selectedCategory = 'All';
+
+  static const _categories = ['All', 'Roads', 'Water', 'Health', 'Education', 'Sanitation', 'Other'];
+
+  List<Map<String, dynamic>> get _filteredItems => _selectedCategory == 'All'
+      ? _items
+      : _items.where((e) => (e['category'] ?? 'Other') == _selectedCategory).toList();
 
   @override
   void initState() {
@@ -43,22 +50,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
         backgroundColor: JanMatTheme.surface,
         onRefresh: _load,
         child: CustomScrollView(slivers: [
-          _AppBar(count: _items.length),
+          _AppBar(count: _filteredItems.length, total: _items.length),
+          SliverToBoxAdapter(
+            child: _CategoryFilter(
+              categories: _categories,
+              selected: _selectedCategory,
+              onSelect: (c) => setState(() => _selectedCategory = c),
+            ),
+          ),
           if (_loading)
             const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: JanMatTheme.primary)))
           else if (_error != null)
             SliverFillRemaining(child: _ErrorState(error: _error!, onRetry: _load))
-          else if (_items.isEmpty)
-            const SliverFillRemaining(child: _EmptyState())
+          else if (_filteredItems.isEmpty)
+            SliverFillRemaining(child: _EmptyState(filtered: _selectedCategory != 'All'))
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               sliver: SliverList(delegate: SliverChildBuilderDelegate(
                 (_, i) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _HistoryCard(item: _items[i]),
+                  child: _HistoryCard(item: _filteredItems[i]),
                 ),
-                childCount: _items.length,
+                childCount: _filteredItems.length,
               )),
             ),
         ]),
@@ -69,9 +83,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
 class _AppBar extends StatelessWidget {
   final int count;
-  const _AppBar({required this.count});
+  final int total;
+  const _AppBar({required this.count, required this.total});
   @override
   Widget build(BuildContext context) {
+    final subtitle = count == total
+        ? '$total submission${total == 1 ? "" : "s"}'
+        : '$count of $total submission${total == 1 ? "" : "s"}';
     return SliverAppBar(
       pinned: true,
       expandedHeight: 90,
@@ -83,9 +101,55 @@ class _AppBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('My Reports', style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text('$count submission${count == 1 ? "" : "s"}', style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
+            Text(subtitle, style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 11)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryFilter extends StatelessWidget {
+  final List<String> categories;
+  final String selected;
+  final ValueChanged<String> onSelect;
+  const _CategoryFilter({required this.categories, required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      color: JanMatTheme.background,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final cat = categories[i];
+          final isSelected = selected == cat;
+          final color = cat == 'All' ? JanMatTheme.primary : (JanMatTheme.catColors[cat] ?? JanMatTheme.primary);
+          return GestureDetector(
+            onTap: () => onSelect(cat),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected ? color : JanMatTheme.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? color : JanMatTheme.border),
+              ),
+              child: Text(
+                cat,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : color,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -177,15 +241,21 @@ class _HistoryCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  final bool filtered;
+  const _EmptyState({this.filtered = false});
   @override
   Widget build(BuildContext context) {
     return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.inbox_rounded, color: JanMatTheme.textMuted, size: 64),
+      Icon(filtered ? Icons.filter_list_off_rounded : Icons.inbox_rounded, color: JanMatTheme.textMuted, size: 64),
       const SizedBox(height: 16),
-      const Text('No submissions yet', style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+      Text(filtered ? 'No reports in this category' : 'No submissions yet',
+          style: const TextStyle(color: JanMatTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
-      const Text('Your reports will appear here after you submit them.', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 13), textAlign: TextAlign.center),
+      Text(
+        filtered ? 'Try selecting a different category or "All".' : 'Your reports will appear here after you submit them.',
+        style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 13),
+        textAlign: TextAlign.center,
+      ),
     ]));
   }
 }

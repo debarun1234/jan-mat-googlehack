@@ -150,6 +150,13 @@ class UserService {
     return Map<String, dynamic>.from(resp.data);
   }
 
+  // ── Delete account ───────────────────────────────────────────────────
+  Future<void> deleteAccount(String token) async {
+    await _dio.delete('/users/account', options: _auth(token));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
   // ── Session ───────────────────────────────────────────────────────────
   Future<bool> hasStoredSession() async {
     final prefs = await SharedPreferences.getInstance();

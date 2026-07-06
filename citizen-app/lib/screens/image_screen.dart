@@ -7,6 +7,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import 'heatmap_screen.dart';
 
 class ImageScreen extends StatefulWidget {
   const ImageScreen({super.key});
@@ -20,6 +21,7 @@ class _ImageScreenState extends State<ImageScreen> {
   bool _submitting = false;
   String? _result;
   String? _error;
+  String? _selectedCategory;
 
   @override
   void dispose() { _descCtrl.dispose(); super.dispose(); }
@@ -68,7 +70,7 @@ class _ImageScreenState extends State<ImageScreen> {
 
   void _reset() {
     _descCtrl.clear();
-    setState(() { _image = null; _result = null; _error = null; });
+    setState(() { _image = null; _result = null; _error = null; _selectedCategory = null; });
   }
 
   @override
@@ -104,6 +106,17 @@ class _ImageScreenState extends State<ImageScreen> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: JanMatTheme.border)),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: JanMatTheme.border)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: JanMatTheme.primary, width: 1.5)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                JMCategoryPicker(
+                  selected: _selectedCategory,
+                  onSelect: (cat) => setState(() {
+                    _selectedCategory = _selectedCategory == cat ? null : cat;
+                  }),
+                  onViewMap: (cat) => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => HeatmapScreen(initialCategory: cat)),
                   ),
                 ),
                 const SizedBox(height: 20),

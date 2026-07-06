@@ -116,6 +116,83 @@ class JanMatTheme {
 }
 
 // ── Shared widgets ─────────────────────────────────────────────────
+/// Reusable interactive category picker used on all submission screens.
+/// [selected] — currently selected category (null = none)
+/// [onSelect] — called with the category name; pass the same value to deselect
+/// [onViewMap] — called when user taps "View on Map"; receives the selected category
+class JMCategoryPicker extends StatelessWidget {
+  static const categories = ['Roads', 'Water', 'Health', 'Education', 'Sanitation', 'Other'];
+
+  final String? selected;
+  final ValueChanged<String> onSelect;
+  final ValueChanged<String> onViewMap;
+
+  const JMCategoryPicker({
+    super.key,
+    required this.selected,
+    required this.onSelect,
+    required this.onViewMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text(
+          selected != null ? 'Category: $selected' : 'Select a category (optional)',
+          style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 12),
+        ),
+        if (selected != null) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: () => onViewMap(selected!),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.map_rounded, color: JanMatTheme.primary, size: 13),
+              SizedBox(width: 4),
+              Text('View on Map', style: TextStyle(color: JanMatTheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              Icon(Icons.arrow_forward_ios_rounded, color: JanMatTheme.primary, size: 11),
+            ]),
+          ),
+        ],
+      ]),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8, runSpacing: 8,
+        children: categories.map((c) {
+          final color = JanMatTheme.catColors[c] ?? JanMatTheme.catColors['Other']!;
+          final isSelected = selected == c;
+          return GestureDetector(
+            onTap: () => onSelect(c),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected ? color : color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? color : color.withValues(alpha: 0.35)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (isSelected) ...[
+                  const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  c,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : color,
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ]),
+            ),
+          );
+        }).toList(),
+      ),
+    ]);
+  }
+}
+
 class JMBadge extends StatelessWidget {
   final String label;
   final Color color;

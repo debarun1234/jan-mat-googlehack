@@ -8,6 +8,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import 'heatmap_screen.dart';
 
 class AudioScreen extends StatefulWidget {
   const AudioScreen({super.key});
@@ -25,6 +26,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
   Timer? _timer;
   String? _result;
   String? _error;
+  String? _selectedCategory;
 
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
@@ -67,7 +69,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
   }
 
   void _discard() {
-    setState(() { _hasRecording = false; _filePath = null; _elapsed = Duration.zero; _result = null; _error = null; });
+    setState(() { _hasRecording = false; _filePath = null; _elapsed = Duration.zero; _result = null; _error = null; _selectedCategory = null; });
   }
 
   Future<void> _submit() async {
@@ -212,6 +214,17 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
             ],
             const SizedBox(height: 8),
             const _LanguageNote(),
+            const SizedBox(height: 16),
+            JMCategoryPicker(
+              selected: _selectedCategory,
+              onSelect: (cat) => setState(() {
+                _selectedCategory = _selectedCategory == cat ? null : cat;
+              }),
+              onViewMap: (cat) => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => HeatmapScreen(initialCategory: cat)),
+              ),
+            ),
             const SizedBox(height: 16),
           ]),
         ),

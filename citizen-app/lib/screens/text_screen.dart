@@ -18,6 +18,7 @@ class _TextScreenState extends State<TextScreen> {
   String? _result;
   String? _error;
   int _charCount = 0;
+  String? _selectedCategory;
 
   @override
   void initState() {
@@ -63,7 +64,7 @@ class _TextScreenState extends State<TextScreen> {
 
   void _reset() {
     _ctrl.clear();
-    setState(() { _result = null; _error = null; _charCount = 0; });
+    setState(() { _result = null; _error = null; _charCount = 0; _selectedCategory = null; });
   }
 
   @override
@@ -86,7 +87,16 @@ class _TextScreenState extends State<TextScreen> {
             if (_result == null) ...[
               _TextField(ctrl: _ctrl, charCount: _charCount),
               const SizedBox(height: 20),
-              _CategoryHints(),
+              JMCategoryPicker(
+                selected: _selectedCategory,
+                onSelect: (cat) => setState(() {
+                  _selectedCategory = _selectedCategory == cat ? null : cat;
+                }),
+                onViewMap: (cat) => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HeatmapScreen(initialCategory: cat)),
+                ),
+              ),
               const SizedBox(height: 24),
               JMButton(
                 label: 'Submit Concern',
@@ -201,24 +211,6 @@ class _TextField extends StatelessWidget {
   }
 }
 
-class _CategoryHints extends StatelessWidget {
-  static const _categories = ['Roads', 'Water', 'Health', 'Education', 'Sanitation', 'Other'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Common categories', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 12)),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8, runSpacing: 8,
-        children: _categories.map((c) {
-          final color = JanMatTheme.catColors[c] ?? JanMatTheme.catColors['Other']!;
-          return JMBadge(label: c, color: color);
-        }).toList(),
-      ),
-    ]);
-  }
-}
 
 class _SuccessBanner extends StatelessWidget {
   final String submissionId;
