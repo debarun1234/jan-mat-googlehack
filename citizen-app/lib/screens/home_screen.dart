@@ -160,10 +160,17 @@ class _ProfileChip extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: JanMatTheme.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (_, scrollCtrl) => SingleChildScrollView(
+          controller: scrollCtrl,
+          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 40, height: 4, decoration: BoxDecoration(color: JanMatTheme.border, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 20),
           // Avatar + name
@@ -222,6 +229,7 @@ class _ProfileChip extends StatelessWidget {
             },
           ),
         ]),
+      ),
       ),
     );
   }

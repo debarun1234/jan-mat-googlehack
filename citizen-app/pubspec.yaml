@@ -39,7 +39,6 @@ dependencies:
 
   # UI
   cupertino_icons: ^1.0.8
-  pin_code_fields: ^9.4.0    # OTP input widget
   country_code_picker: ^3.0.0 # Phone country code
 
 flutter:
