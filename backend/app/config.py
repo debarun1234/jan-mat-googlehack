@@ -17,8 +17,8 @@ class Settings(BaseSettings):
 
     # Gemini / Vertex AI
     gemini_model: str = "gemini-3.1-flash-lite"   # Vertex AI via google-genai SDK
-    # Gemini models are served from us-central1 globally; infra stays in asia-south1
-    gemini_region: str = "us-central1"
+    # gemini-3.1-flash-lite is available at global/us/eu endpoints only, NOT us-central1
+    gemini_region: str = "global"
 
     # Cloud SQL (injected as DATABASE_URL from Secret Manager)
     database_url: str  # postgresql+asyncpg://user:pass@host/db
