@@ -51,6 +51,11 @@ yarn-error.log*
 .yarn-integrity
 dashboard/public/bundle.js
 
+# ── Android signing ──────────────────────────────────────────────────
+*.keystore
+*.jks
+citizen-app/android/key.properties
+
 # ── Flutter / Dart ───────────────────────────────────────────────────
 citizen-app/.dart_tool/
 citizen-app/.flutter-plugins

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name for manual release (e.g. v1.0.0)'
+        description: 'Tag name for manual release (e.g. v1.0.1)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.0.1'
 
 jobs:
   build-apk:
@@ -34,8 +34,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Flutter version
-        run: flutter --version
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode \
+            > citizen-app/android/app/janmat-release.keystore
 
       - name: Get dependencies
         working-directory: citizen-app
@@ -43,13 +45,17 @@ jobs:
 
       - name: Build release APK
         working-directory: citizen-app
+        env:
+          KEYSTORE_PATH: janmat-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: flutter build apk --release
 
       - name: Rename APK
         run: |
           TAG=${{ github.ref_name }}
-          # For workflow_dispatch, use the input tag
-          if [ "$TAG" = "" ] || [ "$TAG" = "refs/heads/main" ]; then
+          if [ "$TAG" = "" ] || [[ "$TAG" == refs/heads/* ]]; then
             TAG="${{ github.event.inputs.tag }}"
           fi
           cp citizen-app/build/app/outputs/flutter-apk/app-release.apk \
@@ -67,19 +73,17 @@ jobs:
 
             AI-driven civic complaint platform for Members of Parliament.
 
-            ### What's new
+            ### Features
             - Multilingual complaint submission — text, image, voice (Hindi, Kannada, Tamil, Telugu, Bengali, English)
-            - Interactive category chips (Roads, Water, Health, Education, Sanitation) filter the heatmap and history in real time
+            - Interactive category chips (Roads, Water, Health, Education, Sanitation) filter the heatmap and history
             - Live constituency demand heatmap driven by citizen submissions
-            - Edit profile and delete account (soft-delete preserves anonymised community data)
+            - Edit profile and delete account
             - Gemini 3.1 Flash-Lite AI extracts structured data from every complaint
 
             ### Installation
             1. Download `${{ env.APK_NAME }}`
             2. On your Android device → Settings → Install unknown apps → allow your browser/Files app
             3. Open the downloaded APK and tap Install
-
-            > **Note:** This is a debug-signed build for hackathon / demo purposes.
           files: ${{ env.APK_NAME }}
           draft: false
           prerelease: false
