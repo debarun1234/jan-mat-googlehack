@@ -315,7 +315,6 @@ async def get_user_submissions(
         "total": len(docs),
     }
 
-
 @router.get("/heatmap/{pin_code}")
 async def get_citizen_heatmap(
     pin_code: str,
