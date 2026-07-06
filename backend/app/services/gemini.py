@@ -76,7 +76,6 @@ def _vertex_schema(schema: dict) -> dict:
 
     return _walk(schema)
 
-
 # ── Output schema — Gemini MUST return exactly this ──────────────────
 
 

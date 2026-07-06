@@ -22,6 +22,7 @@ from typing import Annotated
 import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Header
+from google.cloud import firestore
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import Settings, get_settings
@@ -30,9 +31,31 @@ from app.services.bigquery import BigQueryService, get_bigquery_service
 log = structlog.get_logger()
 router = APIRouter(prefix="/users", tags=["users"])
 
-# ── In-memory user store for POC (replace with Cloud SQL in production) ──
-# In production: use SQLAlchemy async session + Cloud SQL
-_user_store: dict[str, dict] = {}  # firebase_uid → user_record
+# ── Firestore user store — persists across container restarts ─────────
+_db: firestore.AsyncClient | None = None
+
+
+def _get_db() -> firestore.AsyncClient:
+    global _db
+    if _db is None:
+        settings = get_settings()
+        _db = firestore.AsyncClient(project=settings.gcp_project_id)
+    return _db
+
+
+async def _get_user(firebase_uid: str) -> dict | None:
+    doc = await _get_db().collection("janmat_users").document(firebase_uid).get()
+    return doc.to_dict() if doc.exists else None
+
+
+async def _set_user(firebase_uid: str, data: dict) -> None:
+    await _get_db().collection("janmat_users").document(firebase_uid).set(data)
+
+
+async def _update_user(firebase_uid: str, updates: dict) -> None:
+    await _get_db().collection("janmat_users").document(firebase_uid).update(updates)
+
+
 _pincode_map: dict[str, str] = {
     "560064": "KA-BLR-NORTH-01",
     "560065": "KA-BLR-NORTH-01",
@@ -181,9 +204,10 @@ async def firebase_auth(
             raise HTTPException(status_code=401, detail="Token UID mismatch")
 
     # Create or update user record
-    if firebase_uid not in _user_store:
+    user = await _get_user(firebase_uid)
+    if user is None:
         user_id = str(uuid.uuid4())
-        _user_store[firebase_uid] = {
+        user = {
             "user_id": user_id,
             "firebase_uid": firebase_uid,
             "phone_number": request.phone_number,
@@ -197,17 +221,15 @@ async def firebase_auth(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "profile_complete": False,
         }
+        await _set_user(firebase_uid, user)
         log.info(
             "user_created",
             firebase_uid=firebase_uid,
             phone=request.phone_number[:6] + "****",
         )
     else:
-        _user_store[firebase_uid]["last_login_at"] = datetime.now(
-            timezone.utc
-        ).isoformat()
+        await _update_user(firebase_uid, {"last_login_at": datetime.now(timezone.utc).isoformat()})
 
-    user = _user_store[firebase_uid]
     token = _make_user_jwt(
         user["user_id"],
         firebase_uid,
@@ -233,22 +255,23 @@ async def update_profile(
 ):
     """Create or update citizen profile."""
     firebase_uid = current_user["firebase_uid"]
-    if firebase_uid not in _user_store:
+    user = await _get_user(firebase_uid)
+    if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
     constituency_id = _pincode_map.get(request.pin_code, settings.constituency_id)
 
-    _user_store[firebase_uid].update(
-        {
-            "full_name": request.full_name,
-            "town": request.town,
-            "city": request.city,
-            "state": request.state,
-            "pin_code": request.pin_code,
-            "constituency_id": constituency_id,
-            "profile_complete": True,
-        }
-    )
+    updates = {
+        "full_name": request.full_name,
+        "town": request.town,
+        "city": request.city,
+        "state": request.state,
+        "pin_code": request.pin_code,
+        "constituency_id": constituency_id,
+        "profile_complete": True,
+    }
+    await _update_user(firebase_uid, updates)
+    user.update(updates)
 
     log.info(
         "user_profile_updated",
@@ -256,7 +279,6 @@ async def update_profile(
         city=request.city,
         constituency=constituency_id,
     )
-    user = _user_store[firebase_uid]
     return UserResponse(**user)
 
 
@@ -266,7 +288,7 @@ async def get_profile(
 ):
     """Get own profile."""
     firebase_uid = current_user["firebase_uid"]
-    user = _user_store.get(firebase_uid)
+    user = await _get_user(firebase_uid)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserResponse(**user)
@@ -317,7 +339,8 @@ async def list_users(
     offset: int = 0,
 ):
     """MP admin endpoint — list registered citizens with profile data."""
-    users = list(_user_store.values())
+    docs = await _get_db().collection("janmat_users").get()
+    users = [doc.to_dict() for doc in docs]
 
     if constituency_id:
         users = [u for u in users if u.get("constituency_id") == constituency_id]
