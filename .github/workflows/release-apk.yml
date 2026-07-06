@@ -1,0 +1,85 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name for manual release (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-apk:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        working-directory: citizen-app
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: citizen-app
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          TAG=${{ github.ref_name }}
+          # For workflow_dispatch, use the input tag
+          if [ "$TAG" = "" ] || [ "$TAG" = "refs/heads/main" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          cp citizen-app/build/app/outputs/flutter-apk/app-release.apk \
+             janmat-citizen-${TAG}.apk
+          echo "APK_NAME=janmat-citizen-${TAG}.apk" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: JanMat Citizen App ${{ env.RELEASE_TAG }}
+          body: |
+            ## JanMat Citizen App ${{ env.RELEASE_TAG }}
+
+            AI-driven civic complaint platform for Members of Parliament.
+
+            ### What's new
+            - Multilingual complaint submission — text, image, voice (Hindi, Kannada, Tamil, Telugu, Bengali, English)
+            - Interactive category chips (Roads, Water, Health, Education, Sanitation) filter the heatmap and history in real time
+            - Live constituency demand heatmap driven by citizen submissions
+            - Edit profile and delete account (soft-delete preserves anonymised community data)
+            - Gemini 3.1 Flash-Lite AI extracts structured data from every complaint
+
+            ### Installation
+            1. Download `${{ env.APK_NAME }}`
+            2. On your Android device → Settings → Install unknown apps → allow your browser/Files app
+            3. Open the downloaded APK and tap Install
+
+            > **Note:** This is a debug-signed build for hackathon / demo purposes.
+          files: ${{ env.APK_NAME }}
+          draft: false
+          prerelease: false
