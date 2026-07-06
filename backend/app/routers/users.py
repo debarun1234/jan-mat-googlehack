@@ -294,6 +294,28 @@ async def get_profile(
     return UserResponse(**user)
 
 
+@router.get("/submissions")
+async def get_user_submissions(
+    current_user: Annotated[dict, Depends(_get_current_user)],
+    limit: int = 50,
+):
+    """Get own submission history from Firestore."""
+    firebase_uid = current_user["firebase_uid"]
+    docs = await (
+        _get_db()
+        .collection("janmat_users")
+        .document(firebase_uid)
+        .collection("submissions")
+        .order_by("submitted_at", direction="DESCENDING")
+        .limit(limit)
+        .get()
+    )
+    return {
+        "submissions": [doc.to_dict() for doc in docs],
+        "total": len(docs),
+    }
+
+
 @router.get("/heatmap/{pin_code}")
 async def get_citizen_heatmap(
     pin_code: str,

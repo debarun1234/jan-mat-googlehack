@@ -9,6 +9,7 @@ Endpoints:
 """
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 import structlog
@@ -19,9 +20,11 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Header,
     UploadFile,
     status,
 )
+from google.cloud import firestore
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
@@ -34,6 +37,67 @@ from app.services.translation import TranslationService, get_translation_service
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/intake", tags=["intake"])
+
+# ── Firestore submission tracking ─────────────────────────────────────
+_db: firestore.AsyncClient | None = None
+
+
+def _get_db(settings: Settings) -> firestore.AsyncClient:
+    global _db
+    if _db is None:
+        _db = firestore.AsyncClient(project=settings.gcp_project_id)
+    return _db
+
+
+def _firebase_uid_from_token(authorization: str | None) -> str | None:
+    """Extract firebase_uid from our JWT without hard-failing — intake is optional-auth."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        from jose import jwt as jose_jwt
+        from app.config import get_settings as _gs
+        s = _gs()
+        payload = jose_jwt.decode(
+            authorization.split(" ", 1)[1],
+            s.jwt_secret,
+            algorithms=[s.jwt_algorithm],
+        )
+        return payload.get("firebase_uid")
+    except Exception:
+        return None
+
+
+async def _track_submission(
+    settings: Settings,
+    firebase_uid: str,
+    submission_id: str,
+    input_type: str,
+    category: str,
+    urgency: int,
+    summary: str,
+    lat: float | None,
+    lng: float | None,
+) -> None:
+    """Write submission metadata to Firestore and increment submission_count."""
+    try:
+        db = _get_db(settings)
+        user_ref = db.collection("janmat_users").document(firebase_uid)
+        sub_ref  = user_ref.collection("submissions").document(submission_id)
+
+        record = {
+            "submission_id": submission_id,
+            "input_type": input_type,
+            "category": category,
+            "urgency_rating": urgency,
+            "summary_en": summary,
+            "latitude": lat,
+            "longitude": lng,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await sub_ref.set(record)
+        await user_ref.update({"submission_count": firestore.Increment(1)})
+    except Exception as e:
+        log.warning("firestore_submission_track_failed", error=str(e), uid=firebase_uid)
 
 
 # ── Request / Response models ─────────────────────────────────────────
@@ -100,6 +164,7 @@ async def submit_text(
     translation: Annotated[TranslationService, Depends(get_translation_service)],
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
     pubsub: Annotated[PubSubService, Depends(get_pubsub_service)],
+    authorization: Annotated[str | None, Header()] = None,
 ):
     submission_id = _new_submission_id()
     constituency_id = request.constituency_id or settings.constituency_id
@@ -143,10 +208,16 @@ async def submit_text(
         # Publish async event
         background_tasks.add_task(
             pubsub.publish_grievance_submitted,
-            submission_id,
-            constituency_id,
-            "text",
+            submission_id, constituency_id, "text",
         )
+        # Track in Firestore for user submission history
+        firebase_uid = _firebase_uid_from_token(authorization)
+        if firebase_uid:
+            background_tasks.add_task(
+                _track_submission, settings, firebase_uid, submission_id,
+                "text", grievance.category.value, grievance.urgency_rating,
+                grievance.summary_en, request.latitude, request.longitude,
+            )
 
         return SubmissionResponse(
             submission_id=submission_id,
@@ -184,6 +255,7 @@ async def submit_audio(
     constituency_id: str = Form(default=None),
     latitude: float | None = Form(default=None),
     longitude: float | None = Form(default=None),
+    authorization: Annotated[str | None, Header()] = None,
 ):
     submission_id = _new_submission_id()
     constituency_id = constituency_id or settings.constituency_id
@@ -258,10 +330,15 @@ async def submit_audio(
 
         background_tasks.add_task(
             pubsub.publish_grievance_submitted,
-            submission_id,
-            constituency_id,
-            "audio",
+            submission_id, constituency_id, "audio",
         )
+        firebase_uid = _firebase_uid_from_token(authorization)
+        if firebase_uid:
+            background_tasks.add_task(
+                _track_submission, settings, firebase_uid, submission_id,
+                "audio", grievance.category.value, grievance.urgency_rating,
+                grievance.summary_en, latitude, longitude,
+            )
 
         return SubmissionResponse(
             submission_id=submission_id,
@@ -299,6 +376,7 @@ async def submit_image(
     latitude: float | None = Form(default=None),
     longitude: float | None = Form(default=None),
     caption: str | None = Form(default=None),
+    authorization: Annotated[str | None, Header()] = None,
 ):
     submission_id = _new_submission_id()
     constituency_id = constituency_id or settings.constituency_id
@@ -356,10 +434,15 @@ async def submit_image(
 
         background_tasks.add_task(
             pubsub.publish_grievance_submitted,
-            submission_id,
-            constituency_id,
-            "image",
+            submission_id, constituency_id, "image",
         )
+        firebase_uid = _firebase_uid_from_token(authorization)
+        if firebase_uid:
+            background_tasks.add_task(
+                _track_submission, settings, firebase_uid, submission_id,
+                "image", grievance.category.value, grievance.urgency_rating,
+                grievance.summary_en, latitude, longitude,
+            )
 
         return SubmissionResponse(
             submission_id=submission_id,

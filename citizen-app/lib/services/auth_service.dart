@@ -19,15 +19,17 @@ class AuthService {
     required void Function(String verificationId, int? resendToken) onCodeSent,
     required void Function(FirebaseAuthException e) onError,
     required void Function(PhoneAuthCredential credential) onAutoVerified,
+    int? resendToken, // pass on resend for faster delivery
   }) async {
     await _auth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
+      forceResendingToken: resendToken,
       timeout: const Duration(seconds: 60),
       verificationCompleted: onAutoVerified,
       verificationFailed: onError,
-      codeSent: (verificationId, resendToken) {
+      codeSent: (verificationId, newResendToken) {
         _verificationId = verificationId;
-        onCodeSent(verificationId, resendToken);
+        onCodeSent(verificationId, newResendToken);
       },
       codeAutoRetrievalTimeout: (_) {},
     );
