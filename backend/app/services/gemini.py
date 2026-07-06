@@ -76,6 +76,7 @@ def _vertex_schema(schema: dict) -> dict:
 
     return _walk(schema)
 
+
 # ── Output schema — Gemini MUST return exactly this ──────────────────
 
 
@@ -171,9 +172,7 @@ class CompletionVerification(BaseModel):
     verified: bool = Field(
         description="True if the image clearly shows this project type is completed or substantially progressed"
     )
-    confidence: int = Field(
-        ge=0, le=100, description="Confidence percentage 0-100"
-    )
+    confidence: int = Field(ge=0, le=100, description="Confidence percentage 0-100")
     reasoning: str = Field(
         description="2-3 sentence factual explanation of the decision with specific visual observations"
     )
@@ -416,7 +415,9 @@ Return JSON with:
                 temperature=0.0,
                 max_output_tokens=512,
                 response_mime_type="application/json",
-                response_schema=_vertex_schema(CompletionVerification.model_json_schema()),
+                response_schema=_vertex_schema(
+                    CompletionVerification.model_json_schema()
+                ),
             ),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -430,6 +431,98 @@ Return JSON with:
             project=project_description[:60],
         )
         return result
+
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=2, max=8),
+        reraise=True,
+    )
+    async def analyze_complaint_clusters(
+        self,
+        clusters: list[dict],
+        constituency_id: str,
+    ) -> list["AreaInsight"]:
+        """
+        Gemini analyses geographic complaint clusters and identifies the most
+        critical areas requiring MP intervention.
+
+        Prioritisation criteria (Gemini reasons over all three):
+          1. Complaint volume — how many citizens reported issues in this grid cell
+          2. Image-verified count — photo evidence makes complaints more credible & urgent
+          3. Urgency score — citizen-rated severity (1-5 scale)
+        """
+        if not clusters:
+            return []
+
+        cluster_text = "\n".join(
+            [
+                f"- Cell {i + 1}: lat={c['grid_lat']}, lng={c['grid_lng']} | "
+                f"complaints={c['complaint_count']} | image_evidence={c['image_count']} | "
+                f"avg_urgency={c['avg_urgency']}/5 | max_urgency={c['max_urgency']}/5 | "
+                f"categories=[{c['categories']}] | "
+                f"samples={c['sample_summaries'][:2]}"
+                for i, c in enumerate(clusters)
+            ]
+        )
+
+        prompt = f"""You are an AI decision-support system for a Member of Parliament in India.
+
+Your job: analyse the following geographic complaint clusters from constituency {constituency_id}
+and identify the TOP 5 most critical areas requiring immediate government intervention.
+
+Complaint clusters (each is a ~1 km grid cell, last 90 days):
+{cluster_text}
+
+Prioritise cells based on THREE factors in this order:
+1. complaint_count — more citizens = broader community impact
+2. image_count — photo evidence proves the problem exists and is verifiable
+3. avg_urgency — higher citizen-rated urgency = more severe daily impact
+
+For each of the top 5 areas return:
+- grid_lat / grid_lng: exact coordinates from the input
+- area_label: a short descriptive label (e.g. "Northern Market Zone", "Sector 7 Residential") — infer from coords and context
+- urgency_level: "Critical" (avg≥4 or image_count≥5), "High" (avg≥3), or "Medium"
+- complaint_count, image_count: from input
+- top_categories: array of the most-reported categories in this cell
+- ai_reasoning: 2-3 sentences explaining WHY this area is the priority (cite specific numbers)
+- recommended_action: one concrete action the MP should take (e.g. "Dispatch road repair team to inspect potholes")
+
+Return JSON array of exactly 5 objects (fewer if fewer than 5 clusters exist)."""
+
+        class AreaInsightSchema(BaseModel):
+            grid_lat: float
+            grid_lng: float
+            area_label: str
+            urgency_level: str
+            complaint_count: int
+            image_count: int
+            top_categories: list[str]
+            ai_reasoning: str
+            recommended_action: str
+
+        class InsightsResponse(BaseModel):
+            areas: list[AreaInsightSchema]
+
+        model = GenerativeModel(model_name=self._model_name)
+        t0 = time.monotonic()
+        response = await model.generate_content_async(
+            [prompt],
+            generation_config=GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=2048,
+                response_mime_type="application/json",
+                response_schema=_vertex_schema(InsightsResponse.model_json_schema()),
+            ),
+        )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        result = InsightsResponse.model_validate_json(response.text)
+        log.info(
+            "gemini_ai_insights",
+            areas=len(result.areas),
+            latency_ms=latency_ms,
+            constituency=constituency_id,
+        )
+        return [a.model_dump() for a in result.areas]
 
 
 # ── Singleton ─────────────────────────────────────────────────────────

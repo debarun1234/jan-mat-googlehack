@@ -59,7 +59,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .sidebar-footer small{font-size:.7rem;color:rgba(255,255,255,.35)}
 
 /* ── MAIN ── */
-.main{margin-left:var(--sidebar-w);flex:1;padding:24px;min-width:0}
+.main{margin-left:var(--sidebar-w);flex:1;padding:24px;min-width:0;transition:margin-right .3s}
+body.ai-open .main{margin-right:380px}
 
 /* ── PAGE SECTIONS ── */
 .page{display:none}
@@ -132,15 +133,69 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .badge-gray{background:#f5f5f5;color:#607d8b}
 
 /* ── HEATMAP PAGE ── */
-#map{width:100%;height:calc(100vh - 200px);min-height:500px;border-radius:12px}
-.map-controls{
-  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center
-}
+#map{width:100%;height:calc(100vh - 300px);min-height:480px;border-radius:12px;overflow:hidden}
+.map-controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
 .category-chip{
   padding:6px 14px;border-radius:20px;cursor:pointer;font-size:.8rem;font-weight:700;
   border:2px solid transparent;transition:all .2s
 }
 .category-chip.active{border-color:currentColor}
+.map-mode-bar{display:flex;gap:0;margin-bottom:12px;border-radius:8px;overflow:hidden;border:1px solid var(--border);width:fit-content}
+.map-mode-btn{padding:7px 18px;font-size:.8rem;font-weight:700;cursor:pointer;border:none;background:#fff;color:var(--muted);transition:all .2s}
+.map-mode-btn.active{background:var(--primary);color:#fff}
+.map-stats-bar{display:flex;gap:16px;align-items:center;padding:10px 16px;background:#fff;border-radius:10px;margin-bottom:12px;font-size:.82rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.map-stat{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.map-stat strong{color:var(--text)}
+.map-legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-radius:10px;margin-top:10px;font-size:.78rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+
+/* ── AI INSIGHTS PANEL ── */
+.ai-panel{
+  position:fixed;right:0;top:var(--topbar-h);bottom:0;width:380px;
+  background:#fff;border-left:1px solid var(--border);
+  box-shadow:-4px 0 20px rgba(0,0,0,.12);
+  display:flex;flex-direction:column;z-index:150;
+  transform:translateX(100%);transition:transform .3s ease;
+}
+.ai-panel.open{transform:translateX(0)}
+.ai-panel-header{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#1a237e,#3949ab);color:#fff
+}
+.ai-panel-title{font-size:1rem;font-weight:800;flex:1}
+.ai-panel-close{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:1.2rem;padding:4px}
+.ai-panel-body{flex:1;overflow-y:auto;padding:16px}
+.ai-card{
+  border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;
+  cursor:pointer;transition:all .2s;position:relative;overflow:hidden
+}
+.ai-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-1px)}
+.ai-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+.ai-card.critical::before{background:#c62828}
+.ai-card.high::before{background:#e65100}
+.ai-card.medium::before{background:#f9a825}
+.ai-card-rank{font-size:.65rem;font-weight:800;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.ai-card-label{font-size:.95rem;font-weight:800;color:var(--text);margin-bottom:4px}
+.ai-urgency{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:700;margin-bottom:8px}
+.ai-urgency.critical{background:#ffebee;color:#c62828}
+.ai-urgency.high{background:#fff3e0;color:#e65100}
+.ai-urgency.medium{background:#fffde7;color:#f9a825}
+.ai-stats{display:flex;gap:12px;margin-bottom:8px;font-size:.78rem}
+.ai-stat-item{display:flex;align-items:center;gap:4px;color:var(--muted)}
+.ai-stat-item strong{color:var(--text)}
+.ai-reasoning{font-size:.8rem;color:#444;line-height:1.55;margin-bottom:8px}
+.ai-action{font-size:.78rem;color:var(--primary);font-weight:600;border-top:1px solid var(--border);padding-top:8px;margin-top:4px}
+.ai-loading{text-align:center;padding:40px 20px;color:var(--muted)}
+.ai-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-btn{
+  display:flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,#1a237e,#3949ab);color:#fff;
+  border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:700;
+  box-shadow:0 2px 8px rgba(26,35,126,.3);transition:all .2s
+}
+.ai-btn:hover{box-shadow:0 4px 16px rgba(26,35,126,.4);transform:translateY(-1px)}
+.ai-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
 /* ── TABLE ── */
 .table-wrap{overflow-x:auto}
@@ -536,20 +591,51 @@ tr:last-child td{border-bottom:none}
 <!-- ═══════════ PAGE: HEATMAP ═══════════ -->
 <div id="page-heatmap" class="page">
   <div class="page-header">
-    <div class="page-title">🗺️ Demand Heatmap</div>
-    <div class="page-sub">Geographic distribution of citizen complaints by category</div>
+    <div class="page-title">🗺️ Complaint Map</div>
+    <div class="page-sub">Real-time geographic view of citizen grievances — switch between heatmap density and individual markers</div>
   </div>
+
+  <!-- Mode toggle -->
+  <div class="map-mode-bar">
+    <button class="map-mode-btn active" id="mode-btn-heat"   onclick="setMapMode('heat')">🔥 Heatmap</button>
+    <button class="map-mode-btn"        id="mode-btn-marker" onclick="setMapMode('marker')">📍 Markers</button>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="map-stats-bar">
+    <div class="map-stat">Total shown: <strong id="map-count">—</strong></div>
+    <button class="ai-btn" id="ai-insights-btn" onclick="runAiInsights()" style="margin-left:auto">
+      🤖 Gemini Analysis
+    </button>
+  </div>
+
+  <!-- Category filter chips -->
   <div class="map-controls">
-    <strong style="font-size:.85rem;color:var(--muted)">Filter:</strong>
-    <span class="category-chip active" style="background:#e8eaf6;color:#1a237e" onclick="filterHeatmap(null,this)">All</span>
-    <span class="category-chip" style="background:#e3f2fd;color:#1565c0" onclick="filterHeatmap('Education',this)">🏫 Education</span>
-    <span class="category-chip" style="background:#ffebee;color:#c62828" onclick="filterHeatmap('Health',this)">🏥 Health</span>
-    <span class="category-chip" style="background:#fff3e0;color:#e65100" onclick="filterHeatmap('Roads',this)">🛣️ Roads</span>
-    <span class="category-chip" style="background:#e0f2f1;color:#00695c" onclick="filterHeatmap('Water',this)">💧 Water</span>
-    <span class="category-chip" style="background:#ede7f6;color:#4a148c" onclick="filterHeatmap('Sanitation',this)">🚽 Sanitation</span>
+    <strong style="font-size:.82rem;color:var(--muted)">Filter:</strong>
+    <span class="category-chip active" style="background:#e8eaf6;color:#1a237e" onclick="filterMap(null,this)">All</span>
+    <span class="category-chip" style="background:#e3f2fd;color:#1565c0" onclick="filterMap('Education',this)">🏫 Education</span>
+    <span class="category-chip" style="background:#ffebee;color:#c62828" onclick="filterMap('Health',this)">🏥 Health</span>
+    <span class="category-chip" style="background:#fff3e0;color:#e65100" onclick="filterMap('Roads',this)">🛣️ Roads</span>
+    <span class="category-chip" style="background:#e0f2f1;color:#00695c" onclick="filterMap('Water',this)">💧 Water</span>
+    <span class="category-chip" style="background:#ede7f6;color:#4a148c" onclick="filterMap('Sanitation',this)">🚽 Sanitation</span>
+    <span class="category-chip" style="background:#fce4ec;color:#880e4f" onclick="filterMap('Electricity',this)">⚡ Electricity</span>
+    <span class="category-chip" style="background:#f3e5f5;color:#6a1b9a" onclick="filterMap('Other',this)">📋 Other</span>
   </div>
-  <div class="card" style="margin-bottom:0">
-    <div id="map" style="height:calc(100vh - 280px);min-height:500px;border-radius:14px"></div>
+
+  <div class="card" style="margin-bottom:0;padding:0;overflow:hidden">
+    <div id="map"></div>
+  </div>
+
+  <!-- Legend (shown in marker mode) -->
+  <div class="map-legend" id="map-legend" style="display:none">
+    <strong style="width:100%;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">Category</strong>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#1565c0"></div>Education</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#c62828"></div>Health</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#e65100"></div>Roads</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#00695c"></div>Water</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#4a148c"></div>Sanitation</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#f57f17"></div>Electricity</div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#607d8b"></div>Other</div>
   </div>
 </div>
 
@@ -772,6 +858,22 @@ tr:last-child td{border-bottom:none}
 </div><!-- /main -->
 </div><!-- /layout -->
 
+<!-- ═══════════ AI INSIGHTS PANEL ═══════════ -->
+<div id="ai-panel" class="ai-panel">
+  <div class="ai-panel-header">
+    <span style="font-size:1.3rem">🤖</span>
+    <div class="ai-panel-title">Gemini AI Analysis</div>
+    <button class="ai-panel-close" onclick="closeAiPanel()">✕</button>
+  </div>
+  <div class="ai-panel-body" id="ai-panel-body">
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <div>Gemini is analysing complaint clusters…</div>
+      <div style="font-size:.75rem;margin-top:6px;color:#aaa">This may take 5–10 seconds</div>
+    </div>
+  </div>
+</div>
+
 <div id="notification"></div>
 
 <!-- Chart.js -->
@@ -783,12 +885,15 @@ tr:last-child td{border-bottom:none}
 // ═══════════════════════════════════════════════════════════════════
 
 let session = null;
-let map = null, heatLayer = null, allHeatData = [];
+let map = null, heatLayer = null;
+let allHeatData = [], allMarkerData = [];
+let activeMarkers = [], markerClusterer = null;
+let mapMode = 'heat', activeCategory = null;
 let charts = {};
 let projectsList = [];
 const CAT_COLORS = {
   Education:'#1565c0', Health:'#c62828', Roads:'#e65100',
-  Water:'#00695c', Sanitation:'#4a148c', Other:'#546e7a'
+  Water:'#00695c', Sanitation:'#4a148c', Electricity:'#f57f17', Other:'#607d8b'
 };
 
 // ── Navigation ─────────────────────────────────────────────────────
@@ -802,6 +907,7 @@ function showPage(name) {
 
 async function onPageLoad(name) {
   if (name === 'heatmap' && !map && session?.maps_api_key) initMap();
+  else if (name === 'heatmap' && map) refreshMapData();
   if (name === 'users') loadUsers();
   if (name === 'database') loadDBStatus();
   if (name === 'telemetry') { loadTelemetry(); loadHealthGrid(); }
@@ -1077,39 +1183,317 @@ async function loadProjects() {
   } catch(e) { el.innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message}</div>`; }
 }
 
-// ── Google Maps Heatmap ────────────────────────────────────────────
+// ── Google Maps — full implementation ─────────────────────────────
 function initMap() {
-  if (!session?.maps_api_key) { document.getElementById('map').innerHTML='<div class="loading">Maps API key not configured</div>'; return; }
+  if (!session?.maps_api_key) {
+    document.getElementById('map').innerHTML = '<div class="loading">Maps API key not configured</div>';
+    return;
+  }
+  // Load Maps JS + MarkerClusterer
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${session.maps_api_key}&libraries=visualization&callback=onMapReady`;
-  s.async = true; document.head.appendChild(s);
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${session.maps_api_key}&libraries=visualization,marker&callback=onMapReady&loading=async`;
+  s.async = true;
+  document.head.appendChild(s);
+
+  const mc = document.createElement('script');
+  mc.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js';
+  mc.async = true;
+  document.head.appendChild(mc);
 }
 
 window.onMapReady = async function() {
-  map = new google.maps.Map(document.getElementById('map'),{
-    center:{lat:13.0827,lng:77.5878}, zoom:12, mapTypeId:'roadmap',
-    styles:[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}],
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: {lat: 13.0827, lng: 77.5878}, zoom: 12,
+    mapTypeId: 'roadmap',
+    mapTypeControl: true,
+    mapTypeControlOptions: { style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR },
+    fullscreenControl: true,
+    streetViewControl: false,
+    styles: [
+      {featureType:'poi', elementType:'labels', stylers:[{visibility:'off'}]},
+      {featureType:'transit', elementType:'labels', stylers:[{visibility:'off'}]},
+    ],
   });
-  const data = await (await fetch('/api/heatmap')).json();
-  allHeatData = data.points||[];
-  renderHeatmap(allHeatData);
+  await refreshMapData();
 };
 
-function renderHeatmap(pts) {
+async function refreshMapData() {
+  const [heatRes, markerRes] = await Promise.all([
+    fetch('/api/heatmap').then(r => r.json()).catch(() => ({points:[]})),
+    fetch('/api/map-submissions').then(r => r.json()).catch(() => ({points:[]})),
+  ]);
+  allHeatData   = heatRes.points   || [];
+  allMarkerData = markerRes.points || [];
+  document.getElementById('map-update-time').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+  applyMapFilter(activeCategory);
+}
+
+function applyMapFilter(cat) {
+  activeCategory = cat;
+  const heatFiltered   = cat ? allHeatData.filter(p => p.category === cat)   : allHeatData;
+  const markerFiltered = cat ? allMarkerData.filter(p => p.category === cat) : allMarkerData;
+  document.getElementById('map-count').textContent =
+    mapMode === 'heat' ? heatFiltered.length : markerFiltered.length;
+
+  if (mapMode === 'heat') {
+    clearMarkers();
+    renderHeatLayer(heatFiltered);
+  } else {
+    clearHeatLayer();
+    renderMarkers(markerFiltered);
+  }
+}
+
+// ── Heatmap layer ──────────────────────────────────────────────────
+function renderHeatLayer(pts) {
   if (heatLayer) heatLayer.setMap(null);
   if (!pts.length) return;
   heatLayer = new google.maps.visualization.HeatmapLayer({
-    data: pts.map(p=>({location:new google.maps.LatLng(p.lat,p.lng),weight:p.weight})),
-    map, radius:40, opacity:.8,
-    gradient:['rgba(0,0,255,0)','rgba(0,0,255,0.8)','rgba(0,255,255,1)','rgba(0,255,0,1)','rgba(255,255,0,1)','rgba(255,128,0,1)','rgba(255,0,0,1)'],
+    data: pts.map(p => ({
+      location: new google.maps.LatLng(p.lat, p.lng),
+      weight: p.weight || 1,
+    })),
+    map,
+    radius: 40,
+    opacity: 0.8,
+    gradient: [
+      'rgba(26,35,126,0)',
+      'rgba(63,81,181,0.8)',
+      'rgba(0,188,212,1)',
+      'rgba(76,175,80,1)',
+      'rgba(255,235,59,1)',
+      'rgba(255,152,0,1)',
+      'rgba(244,67,54,1)',
+    ],
   });
 }
 
-function filterHeatmap(cat, el) {
-  document.querySelectorAll('.category-chip').forEach(c=>c.classList.remove('active'));
+function clearHeatLayer() {
+  if (heatLayer) { heatLayer.setMap(null); heatLayer = null; }
+}
+
+// ── Marker cluster layer ───────────────────────────────────────────
+let infoWindow = null;
+
+function renderMarkers(pts) {
+  clearMarkers();
+  if (!pts.length) return;
+
+  infoWindow = infoWindow || new google.maps.InfoWindow();
+
+  const markers = pts.map(p => {
+    const color = CAT_COLORS[p.category] || '#607d8b';
+    const marker = new google.maps.Marker({
+      position: {lat: parseFloat(p.lat), lng: parseFloat(p.lng)},
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: color,
+        fillOpacity: 0.9,
+        strokeColor: '#fff',
+        strokeWeight: 1.5,
+      },
+      title: p.category,
+    });
+
+    marker.addListener('click', () => {
+      const urgencyBar = '★'.repeat(Math.min(p.urgency_rating || 0, 5)) +
+                         '☆'.repeat(Math.max(5 - (p.urgency_rating || 0), 0));
+      infoWindow.setContent(`
+        <div style="font-family:'Segoe UI',sans-serif;max-width:240px;padding:4px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+            <strong style="font-size:.9rem">${p.category}</strong>
+          </div>
+          <div style="font-size:.78rem;color:#e65100;margin-bottom:6px">${urgencyBar} Urgency ${p.urgency_rating || '?'}/5</div>
+          <div style="font-size:.82rem;color:#333;line-height:1.4">${p.summary_en || 'No summary available'}</div>
+          <div style="font-size:.72rem;color:#999;margin-top:8px">${p.input_type || ''} · ${p.date || ''}</div>
+        </div>
+      `);
+      infoWindow.open(map, marker);
+    });
+
+    return marker;
+  });
+
+  activeMarkers = markers;
+
+  // Use MarkerClusterer if loaded, else plain markers
+  if (window.markerClusterer) {
+    markerClusterer = new window.markerClusterer.MarkerClusterer({map, markers,
+      renderer: {
+        render({count, position}) {
+          return new google.maps.Marker({
+            position,
+            label: {text: String(count), color:'#fff', fontSize:'11px', fontWeight:'700'},
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 18 + Math.min(count, 30) * 0.3,
+              fillColor: '#1a237e',
+              fillOpacity: 0.85,
+              strokeColor: '#fff',
+              strokeWeight: 2,
+            },
+            zIndex: google.maps.Marker.MAX_ZINDEX + count,
+          });
+        }
+      }
+    });
+  } else {
+    markers.forEach(m => m.setMap(map));
+  }
+}
+
+function clearMarkers() {
+  if (markerClusterer) { markerClusterer.clearMarkers(); markerClusterer = null; }
+  activeMarkers.forEach(m => m.setMap(null));
+  activeMarkers = [];
+}
+
+// ── AI Insights ────────────────────────────────────────────────────
+let aiMarkers = [];
+
+async function runAiInsights() {
+  const btn = document.getElementById('ai-insights-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analysing…';
+
+  // Open panel with loading state
+  document.body.classList.add('ai-open');
+  document.getElementById('ai-panel-body').innerHTML = `
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <div>Gemini is analysing complaint clusters…</div>
+      <div style="font-size:.75rem;margin-top:6px;color:#aaa">Evaluating volume, image evidence & urgency</div>
+    </div>`;
+  document.getElementById('ai-panel').classList.add('open');
+
+  try {
+    const data = await fetch('/api/ai-insights').then(r => r.json());
+    renderAiPanel(data);
+    placeAiMarkers(data.areas || []);
+  } catch(e) {
+    document.getElementById('ai-panel-body').innerHTML =
+      `<div class="ai-loading" style="color:#c62828">⚠️ Analysis failed: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 Gemini Analysis';
+  }
+}
+
+function renderAiPanel(data) {
+  const areas = data.areas || [];
+  if (!areas.length) {
+    document.getElementById('ai-panel-body').innerHTML =
+      '<div class="ai-loading">No complaint clusters found for analysis.</div>';
+    return;
+  }
+  const urgencyClass = u => u === 'Critical' ? 'critical' : u === 'High' ? 'high' : 'medium';
+
+  document.getElementById('ai-panel-body').innerHTML = `
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px;padding:10px;background:#f5f7ff;border-radius:8px">
+      Gemini analysed <strong>${data.total_clusters_analysed}</strong> complaint clusters
+      from the last <strong>${data.days_window}</strong> days and ranked the top areas by
+      complaint volume, photo evidence, and citizen-reported urgency.
+    </div>
+    ${areas.map((a, i) => `
+      <div class="ai-card ${urgencyClass(a.urgency_level)}" onclick="flyToArea(${a.grid_lat},${a.grid_lng})">
+        <div class="ai-card-rank">#${i+1} Priority Area</div>
+        <div class="ai-card-label">📍 ${a.area_label}</div>
+        <span class="ai-urgency ${urgencyClass(a.urgency_level)}">${a.urgency_level}</span>
+        <div class="ai-stats">
+          <div class="ai-stat-item">🗣️ <strong>${a.complaint_count}</strong> complaints</div>
+          <div class="ai-stat-item">📷 <strong>${a.image_count}</strong> with photos</div>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">
+          ${(a.top_categories||[]).map(c=>`<span style="background:#e8eaf6;color:#3f51b5;padding:2px 7px;border-radius:10px;margin-right:4px;font-size:.7rem;font-weight:700">${c}</span>`).join('')}
+        </div>
+        <div class="ai-reasoning">${a.ai_reasoning}</div>
+        <div class="ai-action">💡 ${a.recommended_action}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function placeAiMarkers(areas) {
+  // Clear old AI markers
+  aiMarkers.forEach(m => m.setMap(null));
+  aiMarkers = [];
+  if (!map) return;
+
+  const urgencyColor = u => u === 'Critical' ? '#c62828' : u === 'High' ? '#e65100' : '#f9a825';
+
+  areas.forEach((a, i) => {
+    const color = urgencyColor(a.urgency_level);
+    const marker = new google.maps.Marker({
+      position: {lat: parseFloat(a.grid_lat), lng: parseFloat(a.grid_lng)},
+      map,
+      zIndex: 9999,
+      icon: {
+        path: 'M 0,-12 C -5,-12 -9,-8 -9,-3 C -9,4 0,12 0,12 C 0,12 9,4 9,-3 C 9,-8 5,-12 0,-12 Z',
+        fillColor: color,
+        fillOpacity: 1,
+        strokeColor: '#fff',
+        strokeWeight: 2,
+        scale: 1.4,
+        anchor: new google.maps.Point(0, 12),
+      },
+      label: {
+        text: String(i + 1),
+        color: '#fff',
+        fontSize: '11px',
+        fontWeight: '800',
+      },
+      title: `#${i+1}: ${a.area_label}`,
+    });
+
+    if (infoWindow) {
+      marker.addListener('click', () => {
+        infoWindow.setContent(`
+          <div style="font-family:'Segoe UI',sans-serif;max-width:260px;padding:4px">
+            <div style="font-weight:800;font-size:.9rem;margin-bottom:6px">🤖 AI Priority #${i+1}</div>
+            <div style="font-weight:700;margin-bottom:4px">${a.area_label}</div>
+            <div style="color:${color};font-size:.78rem;font-weight:700;margin-bottom:8px">${a.urgency_level} Priority</div>
+            <div style="font-size:.8rem;margin-bottom:6px">🗣️ ${a.complaint_count} complaints · 📷 ${a.image_count} with photos</div>
+            <div style="font-size:.8rem;color:#444;line-height:1.5;margin-bottom:8px">${a.ai_reasoning}</div>
+            <div style="font-size:.78rem;color:#1a237e;font-weight:600;border-top:1px solid #eee;padding-top:8px">💡 ${a.recommended_action}</div>
+          </div>
+        `);
+        infoWindow.open(map, marker);
+      });
+    }
+
+    aiMarkers.push(marker);
+  });
+}
+
+function flyToArea(lat, lng) {
+  if (!map) return;
+  map.panTo({lat: parseFloat(lat), lng: parseFloat(lng)});
+  map.setZoom(15);
+}
+
+function closeAiPanel() {
+  document.getElementById('ai-panel').classList.remove('open');
+  document.body.classList.remove('ai-open');
+}
+
+
+// ── Mode toggle ────────────────────────────────────────────────────
+function setMapMode(mode) {
+  mapMode = mode;
+  document.getElementById('mode-btn-heat').classList.toggle('active',   mode === 'heat');
+  document.getElementById('mode-btn-marker').classList.toggle('active', mode === 'marker');
+  document.getElementById('map-legend').style.display = mode === 'marker' ? 'flex' : 'none';
+  applyMapFilter(activeCategory);
+}
+
+// ── Category filter ────────────────────────────────────────────────
+function filterMap(cat, el) {
+  document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  const filtered = cat ? allHeatData.filter(p=>p.category===cat) : allHeatData;
-  if (heatLayer) renderHeatmap(filtered);
+  applyMapFilter(cat);
 }
 
 // ── Users ──────────────────────────────────────────────────────────

@@ -209,8 +209,7 @@ async def firebase_auth(
     except Exception as e:
         log.error("firestore_get_user_failed", error=str(e), firebase_uid=firebase_uid)
         raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=500, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
     if user is None:
         user_id = str(uuid.uuid4())
@@ -232,7 +231,9 @@ async def firebase_auth(
             await _set_user(firebase_uid, user)
         except Exception as e:
             log.error("firestore_set_user_failed", error=str(e))
-            raise HTTPException(status_code=500, detail=f"Database error: {type(e).__name__}: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Database error: {type(e).__name__}: {str(e)}"
+            )
         log.info(
             "user_created",
             firebase_uid=firebase_uid,
@@ -240,7 +241,9 @@ async def firebase_auth(
         )
     else:
         try:
-            await _update_user(firebase_uid, {"last_login_at": datetime.now(timezone.utc).isoformat()})
+            await _update_user(
+                firebase_uid, {"last_login_at": datetime.now(timezone.utc).isoformat()}
+            )
         except Exception as e:
             log.warning("firestore_update_login_failed", error=str(e))  # non-fatal
 
@@ -328,6 +331,7 @@ async def get_user_submissions(
         "submissions": [doc.to_dict() for doc in docs],
         "total": len(docs),
     }
+
 
 @router.get("/heatmap/{pin_code}")
 async def get_citizen_heatmap(

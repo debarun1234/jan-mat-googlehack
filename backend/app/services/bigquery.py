@@ -269,6 +269,98 @@ class BigQueryService:
         )
         return [dict(r) for r in job.result()]
 
+    async def get_submission_points(
+        self, constituency_id: str, limit: int = 1000
+    ) -> list[dict]:
+        """
+        Fetch individual submission geo-points for marker view.
+        Returns anonymised points: no submission_id or personal data.
+        """
+        sql = f"""
+        SELECT
+            latitude   AS lat,
+            longitude  AS lng,
+            category,
+            urgency_rating,
+            summary_en,
+            input_type,
+            DATE(submitted_at) AS date
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        WHERE constituency_id = @constituency_id
+          AND latitude  IS NOT NULL
+          AND longitude IS NOT NULL
+          AND ABS(latitude)  BETWEEN 0.001 AND 90
+          AND ABS(longitude) BETWEEN 0.001 AND 180
+        ORDER BY submitted_at DESC
+        LIMIT @limit
+        """
+        client = self._get_client()
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
+                    bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                ]
+            ),
+        )
+        return [dict(r) for r in job.result()]
+
+    async def get_area_complaint_clusters(
+        self, constituency_id: str, days: int = 90
+    ) -> list[dict]:
+        """
+        Grid-aggregate submissions into ~1 km cells for Gemini analysis.
+        Each cell includes complaint count, image-verified count, urgency stats,
+        category breakdown, and sample summaries.
+        """
+        sql = f"""
+        SELECT
+            ROUND(latitude,  2) AS grid_lat,
+            ROUND(longitude, 2) AS grid_lng,
+            COUNT(*)                                          AS complaint_count,
+            COUNTIF(input_type = 'image')                     AS image_count,
+            ROUND(AVG(urgency_rating), 1)                     AS avg_urgency,
+            MAX(urgency_rating)                               AS max_urgency,
+            STRING_AGG(DISTINCT category, ', ' LIMIT 8)      AS categories,
+            ARRAY_AGG(summary_en IGNORE NULLS LIMIT 3)        AS sample_summaries
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        WHERE constituency_id = @constituency_id
+          AND latitude  IS NOT NULL
+          AND longitude IS NOT NULL
+          AND ABS(latitude)  BETWEEN 0.001 AND 90
+          AND ABS(longitude) BETWEEN 0.001 AND 180
+          AND submitted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)
+        GROUP BY grid_lat, grid_lng
+        HAVING complaint_count >= 1
+        ORDER BY complaint_count DESC, avg_urgency DESC
+        LIMIT 50
+        """
+        client = self._get_client()
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter(
+                        "constituency_id", "STRING", constituency_id
+                    ),
+                    bigquery.ScalarQueryParameter("days", "INT64", days),
+                ]
+            ),
+        )
+        rows = []
+        for r in job.result():
+            d = dict(r)
+            # BigQuery returns ARRAY as a list — ensure it's JSON-serialisable
+            if isinstance(d.get("sample_summaries"), list):
+                d["sample_summaries"] = [s for s in d["sample_summaries"] if s]
+            else:
+                d["sample_summaries"] = []
+            rows.append(d)
+        return rows
+
     async def insert_priority_scores(self, rows: list[dict]) -> None:
         """Stream priority score rows into BigQuery."""
         client = self._get_client()
@@ -400,7 +492,7 @@ class BigQueryService:
             GROUP BY category, constituency_id
             HAVING COUNT(*) >= @min_complaints
             """
-        elif filename == 'priority_scoring.sql':
+        elif filename == "priority_scoring.sql":
             return f"""
             WITH hotspots AS (
                 SELECT *
@@ -451,7 +543,7 @@ class BigQueryService:
             FROM scored
             ORDER BY priority_score DESC
             """
-        return 'SELECT 1'
+        return "SELECT 1"
 
 
 _bq_service: BigQueryService | None = None

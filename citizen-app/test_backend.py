@@ -4,7 +4,12 @@ BASE = "https://janmat-backend-w2w3osjaua-el.a.run.app"
 
 tests = [
     ("Health", "GET", f"{BASE}/health", None),
-    ("Intake text", "POST", f"{BASE}/intake/text", {"text": "Test connection from citizen app"}),
+    (
+        "Intake text",
+        "POST",
+        f"{BASE}/intake/text",
+        {"text": "Test connection from citizen app"},
+    ),
 ]
 
 for name, method, url, body in tests:

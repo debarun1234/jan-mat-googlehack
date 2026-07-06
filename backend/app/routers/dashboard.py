@@ -4,7 +4,9 @@ Phase 3 — MP Executive Dashboard Router
 Endpoints:
   POST /dashboard/auth/login       — JWT login for MP
   GET  /dashboard/projects         — ranked project list with evidence
-  GET  /dashboard/heatmap          — lat/lon data for Google Maps overlay
+  GET  /dashboard/heatmap          — aggregated hotspot lat/lon for HeatmapLayer
+  GET  /dashboard/ai-insights      — Gemini-ranked critical areas (volume + image + urgency)
+  GET  /dashboard/map-submissions  — individual submission points for marker view
   GET  /dashboard/trends           — category trends over time
   GET  /dashboard/export/csv       — CSV export of ranked recommendations
 """
@@ -49,6 +51,7 @@ class TokenResponse(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     """Called by the Node.js dashboard server after Google OAuth verification."""
+
     email: str
     name: str
     service_key: str
@@ -270,6 +273,63 @@ async def get_heatmap(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/ai-insights")
+async def get_ai_insights(
+    mp: Annotated[dict, Depends(_get_current_mp)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    days: int = 90,
+):
+    """
+    Gemini-powered analysis of geographic complaint clusters.
+    Ranks areas by complaint volume, image evidence, and urgency.
+    Returns top 5 critical areas with AI reasoning and recommended actions.
+    """
+    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    try:
+        clusters = await bq.get_area_complaint_clusters(constituency_id, days=days)
+        if not clusters:
+            return {
+                "areas": [],
+                "message": "No complaint data available for analysis.",
+                "total_clusters": 0,
+            }
+        areas = await gemini.analyze_complaint_clusters(clusters, constituency_id)
+        return {
+            "areas": areas,
+            "total_clusters_analysed": len(clusters),
+            "days_window": days,
+            "constituency_id": constituency_id,
+        }
+    except Exception as exc:
+        log.error("ai_insights_failed", error=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/map-submissions")
+async def get_map_submissions(
+    mp: Annotated[dict, Depends(_get_current_mp)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    limit: int = 1000,
+):
+    """
+    Individual submission geo-points for the marker/cluster view.
+    Anonymised — no personal data, no submission IDs.
+    """
+    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    try:
+        points = await bq.get_submission_points(constituency_id, limit=limit)
+        return {
+            "constituency_id": constituency_id,
+            "points": points,
+            "total": len(points),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ── Trends ────────────────────────────────────────────────────────────
 
 
@@ -329,9 +389,12 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(
-        math.radians(lat2)
-    ) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
     return R * 2 * math.asin(math.sqrt(a))
 
 
@@ -343,7 +406,7 @@ class CompletionRequest(BaseModel):
     radius_km: float
     submitted_lat: float
     submitted_lon: float
-    image_base64: str          # base64url or standard base64 encoded image bytes
+    image_base64: str  # base64url or standard base64 encoded image bytes
     mime_type: str = "image/jpeg"
     notes: str = ""
 
@@ -372,8 +435,10 @@ async def submit_project_completion(
 
     # 1. Geolocation verification
     distance_km = _haversine_km(
-        body.submitted_lat, body.submitted_lon,
-        body.center_lat, body.center_lon,
+        body.submitted_lat,
+        body.submitted_lon,
+        body.center_lat,
+        body.center_lon,
     )
     geo_threshold = max(body.radius_km + 0.5, 1.0)
     geo_verified = distance_km <= geo_threshold
@@ -410,7 +475,11 @@ async def submit_project_completion(
                 content_type=body.mime_type,
             )
         except Exception as e:
-            log.warning("gcs_completion_upload_failed", error=str(e), completion_id=completion_id)
+            log.warning(
+                "gcs_completion_upload_failed",
+                error=str(e),
+                completion_id=completion_id,
+            )
             evidence_gcs_uri = ""
 
         try:
@@ -433,7 +502,9 @@ async def submit_project_completion(
                 notes=body.notes,
             )
         except Exception as e:
-            log.warning("bq_completion_log_failed", error=str(e), completion_id=completion_id)
+            log.warning(
+                "bq_completion_log_failed", error=str(e), completion_id=completion_id
+            )
 
     log.info(
         "project_completion_submitted",

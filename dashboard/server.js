@@ -195,7 +195,9 @@ function apiRoute(method, routePath, handler) {
 
 // ── Dashboard data routes ─────────────────────────────────────────────
 apiRoute("get", "/api/projects",  req => proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: true }));
-apiRoute("get", "/api/heatmap",   req => proxyGet(req, "/dashboard/heatmap"));
+apiRoute("get", "/api/heatmap",          req => proxyGet(req, "/dashboard/heatmap"));
+apiRoute("get", "/api/map-submissions",  req => proxyGet(req, "/dashboard/map-submissions", { limit: req.query.limit || 1000 }));
+apiRoute("get", "/api/ai-insights",      req => proxyGet(req, "/dashboard/ai-insights",      { days: req.query.days || 90 }));
 apiRoute("get", "/api/trends",    req => proxyGet(req, "/dashboard/trends", { days: req.query.days || 30 }));
 apiRoute("get", "/api/stats/:id", req => proxyGet(req, `/analytics/stats/${req.params.id}`));
 
