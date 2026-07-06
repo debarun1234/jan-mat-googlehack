@@ -104,7 +104,7 @@ class BigQueryService:
                     "constituency_id", "STRING", constituency_id
                 ),
                 bigquery.ScalarQueryParameter("cluster_radius_km", "FLOAT64", 2.0),
-                bigquery.ScalarQueryParameter("min_complaints", "INT64", 10),
+                bigquery.ScalarQueryParameter("min_complaints", "INT64", 1),
             ]
         )
         job = client.query(sql, job_config=job_config)
@@ -363,10 +363,30 @@ class BigQueryService:
 
     async def insert_priority_scores(self, rows: list[dict]) -> None:
         """Stream priority score rows into BigQuery."""
+        # Columns that exist in the priority_scores BQ schema
+        _SCORE_COLS = {
+            "score_id", "generated_at", "constituency_id", "rank", "category",
+            "suggested_project", "priority_score", "demand_score", "gap_index",
+            "complaint_count", "avg_urgency", "center_lat", "center_lon",
+            "evidence_log", "hotspot_id",
+        }
+        clean = []
+        for r in rows:
+            row = {k: v for k, v in r.items() if k in _SCORE_COLS}
+            # SQL outputs priority_rank; BQ schema calls it rank
+            if "rank" not in row and "priority_rank" in r:
+                row["rank"] = r["priority_rank"]
+            row.setdefault("evidence_log", "")   # REQUIRED in schema
+            row.setdefault("score_id", None)
+            import uuid as _uuid
+            if not row.get("score_id"):
+                row["score_id"] = str(_uuid.uuid4())
+            clean.append(row)
+
         client = self._get_client()
         errors = client.insert_rows_json(
             self._table(self._analytics_ds, "priority_scores"),
-            rows,
+            clean,
         )
         if errors:
             log.error("bq_priority_insert_error", errors=errors)
@@ -374,10 +394,25 @@ class BigQueryService:
 
     async def insert_hotspots(self, rows: list[dict]) -> None:
         """Stream demand hotspot rows into BigQuery."""
+        # Columns that exist in the demand_hotspots BQ schema
+        _HOTSPOT_COLS = {
+            "hotspot_id", "computed_at", "category", "center_lat", "center_lon",
+            "radius_km", "complaint_count", "avg_urgency", "affected_population",
+            "demand_score", "gap_index", "priority_score", "priority_rank",
+            "constituency_id", "ward_id", "evidence_log", "suggested_project",
+        }
+        clean = []
+        for r in rows:
+            row = {k: v for k, v in r.items() if k in _HOTSPOT_COLS}
+            row.setdefault("ward_id", None)
+            row.setdefault("evidence_log", None)
+            row.setdefault("affected_population", None)
+            clean.append(row)
+
         client = self._get_client()
         errors = client.insert_rows_json(
             self._table(self._analytics_ds, "demand_hotspots"),
-            rows,
+            clean,
         )
         if errors:
             log.error("bq_hotspot_insert_error", errors=errors)
@@ -453,18 +488,30 @@ class BigQueryService:
             )
 
     def _load_query(self, filename: str) -> str:
-        """Load a SQL query from bigquery/queries/."""
+        """
+        Load a SQL query from bigquery/queries/ and inject fully-qualified
+        table names so the query works from Cloud Run (needs 3-part names).
+        """
         import pathlib
 
-        # /app/app/services/bigquery.py → 3x parent → /app → bigquery/queries
-        # (build context = project root; COPY bigquery/queries/ ./bigquery/queries/)
         query_dir = pathlib.Path(__file__).parent.parent.parent / "bigquery" / "queries"
         query_file = query_dir / filename
         if query_file.exists():
-            return query_file.read_text()
-        # Fallback: inline query (used in tests / minimal deploys)
-        log.warning("bq_query_file_not_found", file=str(query_file))
-        return self._inline_query(filename)
+            sql = query_file.read_text()
+        else:
+            log.warning("bq_query_file_not_found", file=str(query_file))
+            sql = self._inline_query(filename)
+
+        # Replace 2-part names with fully-qualified 3-part names.
+        # SQL files use `janmat_analytics.X` and `janmat_infrastructure.X`.
+        sql = sql.replace(
+            "`janmat_analytics.",
+            f"`{self._project}.{self._analytics_ds}.",
+        ).replace(
+            "`janmat_infrastructure.",
+            f"`{self._project}.{self._infra_ds}.",
+        )
+        return sql
 
     def _inline_query(self, filename: str) -> str:
         """Fallback inline queries if file not found."""
@@ -490,7 +537,7 @@ class BigQueryService:
               AND processing_status = 'processed'
               AND submitted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
             GROUP BY category, constituency_id
-            HAVING COUNT(*) >= @min_complaints
+            HAVING COUNT(*) >= @min_complaints  -- set to 1 for POC
             """
         elif filename == "priority_scoring.sql":
             return f"""
