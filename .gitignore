@@ -59,7 +59,7 @@ citizen-app/.packages
 citizen-app/build/
 citizen-app/android/.gradle/
 citizen-app/android/local.properties
-citizen-app/android/app/google-services.json
+# citizen-app/android/app/google-services.json  # committed — Firebase config is not a secret
 citizen-app/ios/Pods/
 citizen-app/ios/Flutter/Flutter.framework
 citizen-app/ios/Flutter/Flutter.podspec
@@ -74,6 +74,7 @@ gcp-key*.json
 credentials*.json
 *-key.json
 application_default_credentials.json
+!citizen-app/android/app/google-services.json
 !citizen-app/android/app/google-services.json.example
 
 # ── OS ───────────────────────────────────────────────────────────────
