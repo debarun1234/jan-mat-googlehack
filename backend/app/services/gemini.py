@@ -1,12 +1,12 @@
 """
 Gemini service — deterministic structured extraction via Vertex AI.
 
-Gemini is NEVER used as a chatbot. Every call:
-  1. Forces a strict JSON schema via response_schema (Pydantic → OpenAPI)
+Uses the new google-genai SDK (replaces deprecated vertexai.generative_models).
+
+Every call:
+  1. Forces a strict JSON schema via response_schema (Pydantic model passed directly)
   2. Validates the output against the schema — rejects anything malformed
   3. Returns a typed Pydantic model, not raw text
-
-This is the core differentiator of JanMat vs. naive LLM hackathon projects.
 """
 
 import time
@@ -14,70 +14,16 @@ from enum import Enum
 from typing import Optional
 
 import structlog
-import vertexai
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
-from vertexai.generative_models import (
-    GenerationConfig,
-    GenerativeModel,
-    Part,
-    SafetySetting,
-    HarmCategory,
-    HarmBlockThreshold,
-)
 
 from app.config import get_settings
 
 log = structlog.get_logger()
 
-
-def _vertex_schema(schema: dict) -> dict:
-    """
-    Convert a Pydantic-generated JSON schema to a Vertex AI-compatible schema.
-
-    Vertex AI rejects:
-      - type: "null"  (Pydantic v2 emits anyOf: [{type: X}, {type: null}] for Optional fields)
-      - $ref / $defs  (Vertex AI does not resolve JSON Schema references)
-
-    This function:
-      1. Inlines all $ref references from $defs
-      2. Rewrites anyOf: [{type: X}, {type: null}]  →  {type: X, nullable: true}
-      3. Strips noisy keys: title, default, $defs, $schema
-    """
-    defs: dict = schema.get("$defs", {})
-    _STRIP = {"title", "default", "$defs", "$schema"}
-
-    def _inline(node: dict) -> dict:
-        if "$ref" not in node:
-            return node
-        name = node["$ref"].rsplit("/", 1)[-1]
-        resolved = dict(defs.get(name, {}))
-        resolved.update({k: v for k, v in node.items() if k != "$ref"})
-        return resolved
-
-    def _walk(node):
-        if isinstance(node, list):
-            return [_walk(item) for item in node]
-        if not isinstance(node, dict):
-            return node
-
-        node = _inline(node)
-
-        if "anyOf" in node:
-            non_null = [p for p in node["anyOf"] if p.get("type") != "null"]
-            has_null = len(non_null) < len(node["anyOf"])
-            rest = {k: v for k, v in node.items() if k not in ("anyOf", *_STRIP)}
-            if has_null and len(non_null) == 1:
-                return _walk({**non_null[0], **rest, "nullable": True})
-            node = {**rest, "anyOf": [_walk(p) for p in non_null]}
-            return node
-
-        return {k: _walk(v) for k, v in node.items() if k not in _STRIP}
-
-    return _walk(schema)
-
-
-# ── Output schema — Gemini MUST return exactly this ──────────────────
+# ── Output schema — Gemini MUST return exactly this ───────────────────
 
 
 class GrievanceCategory(str, Enum):
@@ -123,8 +69,6 @@ class StructuredGrievance(BaseModel):
     @field_validator("latitude")
     @classmethod
     def lat_in_india(cls, v: float) -> float:
-        # India bounding box: 6.5–37.1°N, 68–97.4°E
-        # Allow some slack for border areas / ocean submissions
         if not (6.0 <= v <= 38.0):
             raise ValueError(f"Latitude {v} is outside India's bounds")
         return round(v, 6)
@@ -182,41 +126,39 @@ class CompletionVerification(BaseModel):
     )
 
 
+# ── Safety settings (reusable) ────────────────────────────────────────
+
+_SAFETY_OFF = [
+    types.SafetySetting(
+        category="HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold="BLOCK_NONE",
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_HARASSMENT",
+        threshold="BLOCK_NONE",
+    ),
+]
+
+
 class GeminiService:
     def __init__(self):
         settings = get_settings()
-        vertexai.init(
+        self._client = genai.Client(
+            vertexai=True,
             project=settings.gcp_project_id,
-            location=settings.gemini_region,  # us-central1 — Gemini models are not available in asia-south1
+            location=settings.gemini_region,  # us-central1
         )
-        self._model_name = settings.gemini_model
-        self._model: GenerativeModel | None = None
+        self._model = settings.gemini_model  # gemini-3.1-flash-lite
 
-    def _get_model(self) -> GenerativeModel:
-        if self._model is None:
-            self._model = GenerativeModel(
-                model_name=self._model_name,
-                system_instruction=_SYSTEM_INSTRUCTION,
-                safety_settings=[
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                ],
-            )
-        return self._model
-
-    def _generation_config(self) -> GenerationConfig:
-        return GenerationConfig(
-            temperature=0.0,  # Deterministic — no creativity
+    def _extraction_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=_SYSTEM_INSTRUCTION,
+            temperature=0.0,
             top_p=1.0,
             max_output_tokens=512,
             response_mime_type="application/json",
-            response_schema=_vertex_schema(StructuredGrievance.model_json_schema()),
+            response_schema=StructuredGrievance,
+            safety_settings=_SAFETY_OFF,
         )
 
     @retry(
@@ -229,31 +171,25 @@ class GeminiService:
         text: str,
         translated_text: str | None = None,
     ) -> tuple[StructuredGrievance, int]:
-        """
-        Extract structured grievance from text.
-        Returns (StructuredGrievance, latency_ms).
-        Uses translated_text if available, falls back to raw text.
-        """
+        """Extract structured grievance from text. Returns (grievance, latency_ms)."""
         content = translated_text or text
         prompt = _TEXT_EXTRACTION_PROMPT.format(text=content)
 
         t0 = time.monotonic()
-        model = self._get_model()
-        response = await model.generate_content_async(
-            [prompt],
-            generation_config=self._generation_config(),
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=self._extraction_config(),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
 
-        raw_json = response.text
-        grievance = StructuredGrievance.model_validate_json(raw_json)
-
+        grievance = StructuredGrievance.model_validate_json(response.text)
         log.info(
             "gemini_text_extraction",
             category=grievance.category,
             urgency=grievance.urgency_rating,
             latency_ms=latency_ms,
-            model=self._model_name,
+            model=self._model,
         )
         return grievance, latency_ms
 
@@ -267,29 +203,24 @@ class GeminiService:
         image_bytes: bytes,
         mime_type: str = "image/jpeg",
     ) -> tuple[StructuredGrievance, int]:
-        """
-        Extract structured grievance from an image (multimodal).
-        image_bytes: raw bytes of the uploaded image.
-        """
+        """Extract structured grievance from an image (multimodal)."""
         t0 = time.monotonic()
-        model = self._get_model()
 
-        image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
-        response = await model.generate_content_async(
-            [image_part, _IMAGE_EXTRACTION_PROMPT],
-            generation_config=self._generation_config(),
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=[image_part, _IMAGE_EXTRACTION_PROMPT],
+            config=self._extraction_config(),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
 
-        raw_json = response.text
-        grievance = StructuredGrievance.model_validate_json(raw_json)
-
+        grievance = StructuredGrievance.model_validate_json(response.text)
         log.info(
             "gemini_image_extraction",
             category=grievance.category,
             urgency=grievance.urgency_rating,
             latency_ms=latency_ms,
-            model=self._model_name,
+            model=self._model,
             mime_type=mime_type,
         )
         return grievance, latency_ms
@@ -304,15 +235,7 @@ class GeminiService:
         hotspot: dict,
         infra_facts: dict,
     ) -> str:
-        """
-        Generate the Evidence Log paragraph for a demand hotspot.
-        This is Phase 3 — the MP-facing justification for a ranked project.
-
-        hotspot: row from demand_hotspots BigQuery table
-        infra_facts: matched row from public_infrastructure table
-
-        Returns a 2-3 sentence evidence string (plain text, no markdown).
-        """
+        """Generate the Evidence Log paragraph for a demand hotspot (Phase 3)."""
         prompt = f"""Generate a concise, factual Evidence Log for this government development project recommendation.
 Write 2-3 sentences in formal English. Cite specific numbers. Do NOT use markdown.
 
@@ -332,20 +255,13 @@ Public infrastructure baseline:
 
 Write the Evidence Log now:"""
 
-        model = GenerativeModel(
-            model_name=self._model_name,
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        )
-        response = await model.generate_content_async(
-            [prompt],
-            generation_config=GenerationConfig(
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
                 temperature=0.2,
                 max_output_tokens=256,
+                safety_settings=_SAFETY_OFF,
             ),
         )
         evidence = response.text.strip()
@@ -367,12 +283,8 @@ Write the Evidence Log now:"""
         mime_type: str,
         project_description: str,
         category: str,
-    ) -> "CompletionVerification":
-        """
-        Use Gemini vision to verify a project completion photo.
-        Uses a fresh model without the grievance extraction system instruction.
-        Returns structured CompletionVerification.
-        """
+    ) -> CompletionVerification:
+        """Use Gemini vision to verify a project completion photo."""
         prompt = f"""You are a government project completion inspector in India.
 
 Project to verify: {project_description}
@@ -387,37 +299,22 @@ Be strict: verified=true only for clear photographic evidence matching the proje
 Do NOT approve: empty land, unrelated photos, vague blurry images with no identifiable infrastructure.
 
 Return JSON with:
-- verified: boolean (true only for clear visual evidence of completion)
+- verified: boolean
 - confidence: integer 0-100
-- reasoning: string, 2-3 sentences explaining your decision with specific visual observations
+- reasoning: string, 2-3 sentences with specific visual observations
 - issues: array of strings listing blockers if verified=false, empty array if verified=true"""
 
-        # Fresh model WITHOUT the grievance extraction system instruction
-        model = GenerativeModel(
-            model_name=self._model_name,
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        )
-
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
         t0 = time.monotonic()
-        image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
-        response = await model.generate_content_async(
-            [image_part, prompt],
-            generation_config=GenerationConfig(
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=[image_part, prompt],
+            config=types.GenerateContentConfig(
                 temperature=0.0,
                 max_output_tokens=512,
                 response_mime_type="application/json",
-                response_schema=_vertex_schema(
-                    CompletionVerification.model_json_schema()
-                ),
+                response_schema=CompletionVerification,
+                safety_settings=_SAFETY_OFF,
             ),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -441,15 +338,10 @@ Return JSON with:
         self,
         clusters: list[dict],
         constituency_id: str,
-    ) -> list["AreaInsight"]:
+    ) -> list[dict]:
         """
         Gemini analyses geographic complaint clusters and identifies the most
         critical areas requiring MP intervention.
-
-        Prioritisation criteria (Gemini reasons over all three):
-          1. Complaint volume — how many citizens reported issues in this grid cell
-          2. Image-verified count — photo evidence makes complaints more credible & urgent
-          3. Urgency score — citizen-rated severity (1-5 scale)
         """
         if not clusters:
             return []
@@ -467,7 +359,7 @@ Return JSON with:
 
         prompt = f"""You are an AI decision-support system for a Member of Parliament in India.
 
-Your job: analyse the following geographic complaint clusters from constituency {constituency_id}
+Analyse the following geographic complaint clusters from constituency {constituency_id}
 and identify the TOP 5 most critical areas requiring immediate government intervention.
 
 Complaint clusters (each is a ~1 km grid cell, last 90 days):
@@ -480,14 +372,14 @@ Prioritise cells based on THREE factors in this order:
 
 For each of the top 5 areas return:
 - grid_lat / grid_lng: exact coordinates from the input
-- area_label: a short descriptive label (e.g. "Northern Market Zone", "Sector 7 Residential") — infer from coords and context
+- area_label: a short descriptive label inferred from coords and context
 - urgency_level: "Critical" (avg≥4 or image_count≥5), "High" (avg≥3), or "Medium"
 - complaint_count, image_count: from input
 - top_categories: array of the most-reported categories in this cell
 - ai_reasoning: 2-3 sentences explaining WHY this area is the priority (cite specific numbers)
-- recommended_action: one concrete action the MP should take (e.g. "Dispatch road repair team to inspect potholes")
+- recommended_action: one concrete action the MP should take
 
-Return JSON array of exactly 5 objects (fewer if fewer than 5 clusters exist)."""
+Return a JSON object with an "areas" key containing an array of exactly 5 objects (fewer if fewer than 5 clusters exist)."""
 
         class AreaInsightSchema(BaseModel):
             grid_lat: float
@@ -503,18 +395,19 @@ Return JSON array of exactly 5 objects (fewer if fewer than 5 clusters exist).""
         class InsightsResponse(BaseModel):
             areas: list[AreaInsightSchema]
 
-        model = GenerativeModel(model_name=self._model_name)
         t0 = time.monotonic()
-        response = await model.generate_content_async(
-            [prompt],
-            generation_config=GenerationConfig(
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
                 temperature=0.1,
                 max_output_tokens=2048,
                 response_mime_type="application/json",
-                response_schema=_vertex_schema(InsightsResponse.model_json_schema()),
+                response_schema=InsightsResponse,
             ),
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
+
         result = InsightsResponse.model_validate_json(response.text)
         log.info(
             "gemini_ai_insights",

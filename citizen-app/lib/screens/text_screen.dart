@@ -5,6 +5,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import 'heatmap_screen.dart';
 
 class TextScreen extends StatefulWidget {
   const TextScreen({super.key});

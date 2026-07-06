@@ -12,7 +12,8 @@ pydantic
 pydantic-settings
 
 # Google Cloud SDKs
-google-cloud-aiplatform        # Vertex AI / Gemini
+google-cloud-aiplatform        # Vertex AI platform SDK
+google-genai                   # New Gemini SDK (replaces vertexai.generative_models)
 google-cloud-bigquery         # Analytics + streaming insert
 google-cloud-storage          # GCS media upload
 google-cloud-pubsub            # Pub/Sub publish

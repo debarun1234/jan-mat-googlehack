@@ -1,20 +1,25 @@
 """
 Gemini API client for structured AI inference.
-Implements retry logic, schema validation, and streaming.
+Implements retry logic, schema validation, and structured output.
+
+Uses the new google-genai SDK (replaces deprecated vertexai.generative_models
+and google-generativeai). Both Vertex AI and AI Studio modes are supported
+through the same client interface.
 
 Authentication strategy (in priority order):
-  1. GEMINI_API_KEY env var → uses google.generativeai (AI Studio endpoint)
-  2. No key → uses Vertex AI SDK with Application Default Credentials
+  1. GEMINI_API_KEY env var → AI Studio endpoint (genai.Client(api_key=...))
+  2. No key → Vertex AI with Application Default Credentials
      (Cloud Run service account must have roles/aiplatform.user)
 """
 
 import json
 import logging
-import asyncio
-from typing import Dict, Any, Optional
 import time
+from typing import Dict, Any, Optional
 
-from google.api_core import retry, exceptions
+from google import genai
+from google.genai import types
+from google.api_core import exceptions
 
 from app.config.settings import get_settings
 from app.utils.errors import AIError, ErrorCode
@@ -24,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    """Production Gemini client with structured output."""
+    """Production Gemini client with structured output (google-genai SDK)."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -32,31 +37,26 @@ class GeminiClient:
 
         if self._use_vertex:
             # Vertex AI — uses Cloud Run service account (ADC), no key needed
-            import vertexai
-            from vertexai.generative_models import GenerativeModel
-
             logger.info(
-                "GEMINI_API_KEY not set — using Vertex AI SDK with ADC "
-                f"(project={self.settings.cloud.gcp_project_id}, "
-                f"location={self.settings.cloud.gcp_region})"
+                "GEMINI_API_KEY not set — using Vertex AI via google-genai SDK "
+                f"(project={self.settings.cloud.gcp_project_id}, location=us-central1)"
             )
-            vertexai.init(
+            self._client = genai.Client(
+                vertexai=True,
                 project=self.settings.cloud.gcp_project_id,
-                location="global",
+                location="us-central1",  # Gemini served globally from us-central1
             )
-            self.model = GenerativeModel(self.settings.ai.gemini_model)
         else:
             # AI Studio / Gemini API — uses explicit API key
-            import google.generativeai as genai
+            logger.info("Using AI Studio endpoint with GEMINI_API_KEY")
+            self._client = genai.Client(api_key=self.settings.ai.gemini_api_key)
 
-            genai.configure(api_key=self.settings.ai.gemini_api_key)
-            self.model = genai.GenerativeModel(self.settings.ai.gemini_model)
+        self._model = self.settings.ai.gemini_model
         self.call_count = 0
         self.error_count = 0
 
     def _build_system_prompt(self) -> str:
         """Build system prompt with constraints."""
-
         return """You are a data classification AI for citizen grievances.
 Your task is to analyze citizen feedback and extract structured information.
 
@@ -83,7 +83,6 @@ Never include additional fields, markdown formatting, or explanations.
 
     def _build_user_prompt(self, text: str) -> str:
         """Build user prompt with text."""
-
         return f"""Analyze this citizen grievance and return only JSON:
 
 {text}
@@ -94,30 +93,20 @@ Remember: ONLY return JSON, no other text."""
         """
         Parse Gemini response, extracting JSON if necessary.
 
-        Args:
-            response_text: Raw response from Gemini
-
         Returns:
             JSON string
 
         Raises:
             AIError: If response cannot be parsed
         """
-
-        # Try to find JSON in response
         try:
-            # First, try direct parse
             json.loads(response_text)
             return response_text
         except json.JSONDecodeError:
             pass
 
-        # Try to extract JSON from response
-        # Look for { ... } pattern
         import re
-
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-
         if json_match:
             json_str = json_match.group(0)
             try:
@@ -126,67 +115,62 @@ Remember: ONLY return JSON, no other text."""
             except json.JSONDecodeError:
                 pass
 
-        # If still no valid JSON
         raise AIError(
             message="Could not extract valid JSON from Gemini response",
             error_code=ErrorCode.AI_INVALID_RESPONSE,
             details={"response": response_text[:500]},
         )
 
-    @retry.Retry(deadline=60)
     def infer(
         self, text: str, request_id: Optional[str] = None, timeout: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Call Gemini API for structured inference.
+        Call Gemini API for structured inference (synchronous).
+
+        Designed to run inside a thread pool executor (FastAPI's
+        loop.run_in_executor) so it does not block the event loop.
 
         Args:
             text: Text to analyze
             request_id: Request ID for tracking
-            timeout: Optional timeout override
+            timeout: Unused — kept for API compatibility
 
         Returns:
-            Parsed JSON response
+            Parsed JSON response dict
 
         Raises:
             AIError: If API call fails
         """
-
-        if timeout is None:
-            timeout = self.settings.ai.ai_timeout_seconds
-
         try:
             self.call_count += 1
 
-            # Build prompts
             system_prompt = self._build_system_prompt()
             user_prompt = self._build_user_prompt(text)
 
-            # Call Gemini
             start_time = time.time()
-
-            response = asyncio.run(
-                self._infer_async(system_prompt, user_prompt, timeout)
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=self.settings.ai.gemini_temperature,
+                    max_output_tokens=self.settings.ai.gemini_max_tokens,
+                    response_mime_type="application/json",
+                ),
             )
-
             duration_ms = (time.time() - start_time) * 1000
 
-            # Parse response
             json_response = self._parse_response(response.text)
             parsed = json.loads(json_response)
 
             logger.info(
                 "Gemini inference completed",
-                request_id=request_id,
-                duration_ms=round(duration_ms, 2),
-                tokens_in=response.usage.prompt_token_count
-                if hasattr(response, "usage")
-                else None,
-                tokens_out=response.usage.completion_token_count
-                if hasattr(response, "usage")
-                else None,
+                extra={
+                    "request_id": request_id,
+                    "duration_ms": round(duration_ms, 2),
+                    "model": self._model,
+                },
             )
-
             return parsed
 
         except exceptions.InvalidArgument as e:
@@ -208,25 +192,6 @@ Remember: ONLY return JSON, no other text."""
                 retry_eligible=True,
             )
 
-        except exceptions.RateLimited as e:
-            self.error_count += 1
-            raise AIError(
-                message="Gemini API rate limited",
-                error_code=ErrorCode.AI_RATE_LIMITED,
-                request_id=request_id,
-                original_exception=e,
-                retry_eligible=True,
-            )
-
-        except asyncio.TimeoutError:
-            self.error_count += 1
-            raise AIError(
-                message="Gemini API timeout",
-                error_code=ErrorCode.AI_TIMEOUT,
-                request_id=request_id,
-                retry_eligible=True,
-            )
-
         except AIError:
             raise
 
@@ -239,39 +204,18 @@ Remember: ONLY return JSON, no other text."""
                 original_exception=e,
             )
 
-    async def _infer_async(self, system_prompt: str, user_prompt: str, timeout: int):
-        """Async Gemini call with timeout."""
-
-        loop = asyncio.get_event_loop()
-
-        def sync_call():
-            return self.model.generate_content(
-                [system_prompt, user_prompt],
-                generation_config={
-                    "temperature": self.settings.ai.gemini_temperature,
-                    "max_output_tokens": self.settings.ai.gemini_max_tokens,
-                },
-            )
-
-        return await asyncio.wait_for(
-            loop.run_in_executor(None, sync_call), timeout=timeout
-        )
-
     def get_stats(self) -> Dict[str, Any]:
         """Get API call statistics."""
-
         return {
             "total_calls": self.call_count,
             "total_errors": self.error_count,
-            "error_rate": self.error_count / self.call_count
-            if self.call_count > 0
-            else 0,
+            "error_rate": self.error_count / self.call_count if self.call_count > 0 else 0,
             "success_count": self.call_count - self.error_count,
         }
 
 
 def get_gemini_client() -> GeminiClient:
-    """Get or create Gemini client."""
+    """Get or create Gemini client singleton."""
     if not hasattr(get_gemini_client, "_instance"):
         get_gemini_client._instance = GeminiClient()
     return get_gemini_client._instance
