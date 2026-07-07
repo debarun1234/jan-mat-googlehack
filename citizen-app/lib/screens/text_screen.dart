@@ -51,7 +51,10 @@ class _TextScreenState extends State<TextScreen> {
     try {
       final svc = ApiService();
       final res = await svc.submitText(text, token: app.token, lat: loc.lat, lng: loc.lng);
-      if (mounted) setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+      if (mounted) {
+        setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+        app.refreshProfile(); // update submission counter
+      }
     } on DioException catch (e) {
       final detail = (e.response?.data as Map?)?['detail']?.toString()
           ?? e.message ?? 'Submission failed';

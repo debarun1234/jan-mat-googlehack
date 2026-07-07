@@ -56,7 +56,10 @@ class _ImageScreenState extends State<ImageScreen> {
         lat: loc.lat,
         lng: loc.lng,
       );
-      if (mounted) setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+      if (mounted) {
+        setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+        app.refreshProfile();
+      }
     } on DioException catch (e) {
       final detail = (e.response?.data as Map?)?['detail']?.toString()
           ?? e.message ?? 'Submission failed';

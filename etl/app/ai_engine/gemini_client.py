@@ -106,6 +106,7 @@ Remember: ONLY return JSON, no other text."""
             pass
 
         import re
+
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_match:
             json_str = json_match.group(0)
@@ -209,7 +210,9 @@ Remember: ONLY return JSON, no other text."""
         return {
             "total_calls": self.call_count,
             "total_errors": self.error_count,
-            "error_rate": self.error_count / self.call_count if self.call_count > 0 else 0,
+            "error_rate": self.error_count / self.call_count
+            if self.call_count > 0
+            else 0,
             "success_count": self.call_count - self.error_count,
         }
 

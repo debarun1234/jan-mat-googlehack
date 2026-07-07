@@ -403,20 +403,25 @@ async def delete_account(
         log.warning("delete_submissions_subcollection_failed", error=str(e))
 
     # 2. Wipe PII but keep the shell record so the UID stays tombstoned
-    await _update_user(firebase_uid, {
-        "full_name":       None,
-        "phone_number":    "[deleted]",
-        "town":            None,
-        "city":            None,
-        "state":           None,
-        "pin_code":        None,
-        "profile_complete": False,
-        "account_deleted":  True,
-        "deleted_at":       datetime.now(timezone.utc).isoformat(),
-    })
+    await _update_user(
+        firebase_uid,
+        {
+            "full_name": None,
+            "phone_number": "[deleted]",
+            "town": None,
+            "city": None,
+            "state": None,
+            "pin_code": None,
+            "profile_complete": False,
+            "account_deleted": True,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     log.info("user_account_soft_deleted", firebase_uid=firebase_uid)
-    return {"message": "Account deleted. Your anonymised submissions remain to support community development."}
+    return {
+        "message": "Account deleted. Your anonymised submissions remain to support community development."
+    }
 
 
 # ── Admin: list all users (MP only, accessed via dashboard) ──────────

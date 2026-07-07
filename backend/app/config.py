@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     gcp_region: str = "asia-south1"
 
     # Gemini / Vertex AI
-    gemini_model: str = "gemini-3.1-flash-lite"   # Vertex AI via google-genai SDK
+    gemini_model: str = "gemini-3.1-flash-lite"  # Vertex AI via google-genai SDK
     # gemini-3.1-flash-lite is available at global/us/eu endpoints only, NOT us-central1
     gemini_region: str = "global"
 

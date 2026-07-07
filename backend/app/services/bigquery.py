@@ -8,7 +8,9 @@ Tables:
   janmat_infrastructure.public_infrastructure  — Census / NFHS reference data
 """
 
-from datetime import datetime, timezone
+import asyncio
+from datetime import datetime, date, timezone
+from decimal import Decimal
 
 import structlog
 from google.cloud import bigquery
@@ -18,6 +20,28 @@ from app.config import get_settings
 from app.services.gemini import StructuredGrievance
 
 log = structlog.get_logger()
+
+
+def _serialize_bq_row(row: dict) -> dict:
+    """
+    Convert BigQuery result values that are not JSON-serializable.
+    - datetime / date → ISO string
+    - Decimal → float
+    - Everything else passes through unchanged.
+    """
+    out = {}
+    for k, v in row.items():
+        if isinstance(v, datetime):
+            out[k] = v.isoformat()
+        elif isinstance(v, date):
+            out[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            out[k] = float(v)
+        elif isinstance(v, list):
+            out[k] = [_serialize_bq_row(i) if isinstance(i, dict) else i for i in v]
+        else:
+            out[k] = v
+    return out
 
 
 class BigQueryService:
@@ -35,6 +59,18 @@ class BigQueryService:
 
     def _table(self, dataset: str, table: str) -> str:
         return f"{self._project}.{dataset}.{table}"
+
+    async def _run_query(
+        self, sql: str, job_config: bigquery.QueryJobConfig
+    ) -> list[dict]:
+        """Run a synchronous BQ query in a thread-pool executor so it doesn't block the event loop."""
+        client = self._get_client()
+
+        def _sync():
+            job = client.query(sql, job_config=job_config)
+            return [_serialize_bq_row(dict(row)) for row in job.result()]
+
+        return await asyncio.get_event_loop().run_in_executor(None, _sync)
 
     # ── Phase 1: Stream grievance into BigQuery ──────────────────────
 
@@ -74,10 +110,12 @@ class BigQueryService:
         }
 
         client = self._get_client()
-        errors = client.insert_rows_json(
-            self._table(self._analytics_ds, "citizen_grievances"),
-            [row],
-        )
+        table = self._table(self._analytics_ds, "citizen_grievances")
+
+        def _sync_insert():
+            return client.insert_rows_json(table, [row])
+
+        errors = await asyncio.get_event_loop().run_in_executor(None, _sync_insert)
         if errors:
             log.error("bq_insert_error", errors=errors, submission_id=submission_id)
             raise RuntimeError(f"BigQuery insert failed: {errors}")
@@ -107,9 +145,7 @@ class BigQueryService:
                 bigquery.ScalarQueryParameter("min_complaints", "INT64", 1),
             ]
         )
-        job = client.query(sql, job_config=job_config)
-        results = job.result()
-        rows = [dict(row) for row in results]
+        rows = await self._run_query(sql, job_config)
         log.info(
             "bq_clustering_complete",
             constituency_id=constituency_id,
@@ -132,9 +168,7 @@ class BigQueryService:
                 ),
             ]
         )
-        job = client.query(sql, job_config=job_config)
-        results = job.result()
-        rows = [dict(row) for row in results]
+        rows = await self._run_query(sql, job_config)
         log.info(
             "bq_priority_scoring_complete",
             constituency_id=constituency_id,
@@ -166,10 +200,9 @@ class BigQueryService:
         ORDER BY metric_name
         LIMIT 20
         """
-        client = self._get_client()
-        job = client.query(
+        rows = await self._run_query(
             sql,
-            job_config=bigquery.QueryJobConfig(
+            bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -178,7 +211,6 @@ class BigQueryService:
                 ]
             ),
         )
-        rows = [dict(r) for r in job.result()]
         # Format as readable string for Gemini prompt
         if not rows:
             return {
@@ -224,10 +256,9 @@ class BigQueryService:
         ORDER BY ps.priority_rank ASC
         LIMIT @limit
         """
-        client = self._get_client()
-        job = client.query(
+        rows = await self._run_query(
             sql,
-            job_config=bigquery.QueryJobConfig(
+            bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -236,7 +267,6 @@ class BigQueryService:
                 ]
             ),
         )
-        rows = [dict(r) for r in job.result()]
         log.info("bq_ranking_fetched", constituency_id=constituency_id, rows=len(rows))
         return rows
 
@@ -256,10 +286,9 @@ class BigQueryService:
         ORDER BY complaint_count DESC
         LIMIT 500
         """
-        client = self._get_client()
-        job = client.query(
+        return await self._run_query(
             sql,
-            job_config=bigquery.QueryJobConfig(
+            bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -267,7 +296,6 @@ class BigQueryService:
                 ]
             ),
         )
-        return [dict(r) for r in job.result()]
 
     async def get_submission_points(
         self, constituency_id: str, limit: int = 1000
@@ -294,10 +322,9 @@ class BigQueryService:
         ORDER BY submitted_at DESC
         LIMIT @limit
         """
-        client = self._get_client()
-        job = client.query(
+        return await self._run_query(
             sql,
-            job_config=bigquery.QueryJobConfig(
+            bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -306,7 +333,6 @@ class BigQueryService:
                 ]
             ),
         )
-        return [dict(r) for r in job.result()]
 
     async def get_area_complaint_clusters(
         self, constituency_id: str, days: int = 90
@@ -338,10 +364,9 @@ class BigQueryService:
         ORDER BY complaint_count DESC, avg_urgency DESC
         LIMIT 50
         """
-        client = self._get_client()
-        job = client.query(
+        raw = await self._run_query(
             sql,
-            job_config=bigquery.QueryJobConfig(
+            bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -351,9 +376,7 @@ class BigQueryService:
             ),
         )
         rows = []
-        for r in job.result():
-            d = dict(r)
-            # BigQuery returns ARRAY as a list — ensure it's JSON-serialisable
+        for d in raw:
             if isinstance(d.get("sample_summaries"), list):
                 d["sample_summaries"] = [s for s in d["sample_summaries"] if s]
             else:
@@ -365,29 +388,41 @@ class BigQueryService:
         """Stream priority score rows into BigQuery."""
         # Columns that exist in the priority_scores BQ schema
         _SCORE_COLS = {
-            "score_id", "generated_at", "constituency_id", "rank", "category",
-            "suggested_project", "priority_score", "demand_score", "gap_index",
-            "complaint_count", "avg_urgency", "center_lat", "center_lon",
-            "evidence_log", "hotspot_id",
+            "score_id",
+            "generated_at",
+            "constituency_id",
+            "rank",
+            "category",
+            "suggested_project",
+            "priority_score",
+            "demand_score",
+            "gap_index",
+            "complaint_count",
+            "avg_urgency",
+            "center_lat",
+            "center_lon",
+            "evidence_log",
+            "hotspot_id",
         }
+        import uuid as _uuid
+
         clean = []
         for r in rows:
-            row = {k: v for k, v in r.items() if k in _SCORE_COLS}
-            # SQL outputs priority_rank; BQ schema calls it rank
+            row = _serialize_bq_row({k: v for k, v in r.items() if k in _SCORE_COLS})
             if "rank" not in row and "priority_rank" in r:
                 row["rank"] = r["priority_rank"]
-            row.setdefault("evidence_log", "")   # REQUIRED in schema
-            row.setdefault("score_id", None)
-            import uuid as _uuid
+            row.setdefault("evidence_log", "")
             if not row.get("score_id"):
                 row["score_id"] = str(_uuid.uuid4())
             clean.append(row)
 
         client = self._get_client()
-        errors = client.insert_rows_json(
-            self._table(self._analytics_ds, "priority_scores"),
-            clean,
-        )
+        table = self._table(self._analytics_ds, "priority_scores")
+
+        def _sync_insert():
+            return client.insert_rows_json(table, clean)
+
+        errors = await asyncio.get_event_loop().run_in_executor(None, _sync_insert)
         if errors:
             log.error("bq_priority_insert_error", errors=errors)
             raise RuntimeError(f"BigQuery priority insert failed: {errors}")
@@ -396,24 +431,39 @@ class BigQueryService:
         """Stream demand hotspot rows into BigQuery."""
         # Columns that exist in the demand_hotspots BQ schema
         _HOTSPOT_COLS = {
-            "hotspot_id", "computed_at", "category", "center_lat", "center_lon",
-            "radius_km", "complaint_count", "avg_urgency", "affected_population",
-            "demand_score", "gap_index", "priority_score", "priority_rank",
-            "constituency_id", "ward_id", "evidence_log", "suggested_project",
+            "hotspot_id",
+            "computed_at",
+            "category",
+            "center_lat",
+            "center_lon",
+            "radius_km",
+            "complaint_count",
+            "avg_urgency",
+            "affected_population",
+            "demand_score",
+            "gap_index",
+            "priority_score",
+            "priority_rank",
+            "constituency_id",
+            "ward_id",
+            "evidence_log",
+            "suggested_project",
         }
         clean = []
         for r in rows:
-            row = {k: v for k, v in r.items() if k in _HOTSPOT_COLS}
+            row = _serialize_bq_row({k: v for k, v in r.items() if k in _HOTSPOT_COLS})
             row.setdefault("ward_id", None)
             row.setdefault("evidence_log", None)
             row.setdefault("affected_population", None)
             clean.append(row)
 
         client = self._get_client()
-        errors = client.insert_rows_json(
-            self._table(self._analytics_ds, "demand_hotspots"),
-            clean,
-        )
+        table = self._table(self._analytics_ds, "demand_hotspots")
+
+        def _sync_insert():
+            return client.insert_rows_json(table, clean)
+
+        errors = await asyncio.get_event_loop().run_in_executor(None, _sync_insert)
         if errors:
             log.error("bq_hotspot_insert_error", errors=errors)
             raise RuntimeError(f"BigQuery hotspot insert failed: {errors}")

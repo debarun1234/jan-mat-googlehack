@@ -66,6 +66,15 @@ class AppState extends ChangeNotifier {
   void setToken(String t) { _token = t; notifyListeners(); }
   void setProfile(UserProfile p) { _profile = p; notifyListeners(); }
 
+  /// Re-fetch profile from backend and update state (call after every submission).
+  Future<void> refreshProfile() async {
+    if (_token == null) return;
+    try {
+      final p = await UserService().getProfile(_token!);
+      if (p != null) { _profile = p; notifyListeners(); }
+    } catch (_) {}
+  }
+
   void logout() {
     _token   = null;
     _profile = null;
