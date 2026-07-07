@@ -1224,7 +1224,7 @@ function initMap() {
   }
   // Load Maps JS + MarkerClusterer
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${session.maps_api_key}&libraries=visualization,marker&callback=onMapReady&loading=async`;
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${session.maps_api_key}&libraries=marker&callback=onMapReady&loading=async`;
   s.async = true;
   document.head.appendChild(s);
 
@@ -1278,44 +1278,49 @@ function applyMapFilter(cat) {
   }
 }
 
-// ── Heatmap layer ──────────────────────────────────────────────────
-function renderHeatLayer(pts) {
-  if (heatLayer) heatLayer.setMap(null);
+// ── Heatmap layer (circle overlays — HeatmapLayer removed in Maps API v3.65) ──
+let heatCircles = [];
 
-  // Parse coords — BigQuery may return numbers as strings; filter out invalid/zero points
+function renderHeatLayer(pts) {
+  clearHeatLayer();
+
   const validPts = pts
     .map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng), weight: Number(p.weight) || 1 }))
     .filter(p => !isNaN(p.lat) && !isNaN(p.lng) && Math.abs(p.lat) > 0.001 && Math.abs(p.lng) > 0.001);
 
   if (!validPts.length) return;
 
-  // Normalise weights to 1–10 so sparse / low-count data is still visible
   const maxW = Math.max(...validPts.map(p => p.weight), 1);
-  const data  = validPts.map(p => ({
-    location: new google.maps.LatLng(p.lat, p.lng),
-    weight:   Math.max(1, Math.round((p.weight / maxW) * 10)),
-  }));
 
-  heatLayer = new google.maps.visualization.HeatmapLayer({
-    data,
-    map,
-    radius:       40,
-    opacity:      0.85,
-    dissipating:  false,
-    gradient: [
-      'rgba(0,0,255,0)',
-      'rgba(0,128,255,1)',
-      'rgba(0,255,200,1)',
-      'rgba(0,255,0,1)',
-      'rgba(255,255,0,1)',
-      'rgba(255,128,0,1)',
-      'rgba(255,0,0,1)',
-    ],
+  heatCircles = validPts.map(p => {
+    const intensity = p.weight / maxW; // 0..1
+    // Interpolate blue → cyan → yellow → red
+    let r, g, b;
+    if (intensity < 0.5) {
+      const t = intensity * 2;
+      r = Math.round(0   + t * 255);
+      g = Math.round(128 + t * 127);
+      b = Math.round(255 - t * 255);
+    } else {
+      const t = (intensity - 0.5) * 2;
+      r = 255;
+      g = Math.round(255 - t * 255);
+      b = 0;
+    }
+    return new google.maps.Circle({
+      map,
+      center:      { lat: p.lat, lng: p.lng },
+      radius:      300 + intensity * 1200, // 300m–1.5km
+      fillColor:   `rgb(${r},${g},${b})`,
+      fillOpacity: 0.35 + intensity * 0.35,
+      strokeWeight: 0,
+    });
   });
 }
 
 function clearHeatLayer() {
-  if (heatLayer) { heatLayer.setMap(null); heatLayer = null; }
+  heatCircles.forEach(c => c.setMap(null));
+  heatCircles = [];
 }
 
 // ── Marker cluster layer ───────────────────────────────────────────
