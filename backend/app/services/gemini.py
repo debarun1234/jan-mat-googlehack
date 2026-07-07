@@ -324,6 +324,93 @@ Output ONLY the title:"""
         except Exception:
             return hotspot.get("suggested_project", f"{hotspot.get('category')} Infrastructure Project")
 
+    async def generate_project_analysis(
+        self,
+        hotspot: dict,
+        complaint_summaries: list[str],
+        infra_facts: str,
+    ) -> tuple[str, str | None]:
+        """
+        Single Gemini call returning both project title and evidence log.
+
+        Combines generate_project_title + generate_evidence_log into one API
+        call to halve Gemini latency per project.
+
+        Returns (title, evidence_log). On any failure returns
+        (hotspot["suggested_project"], None) so the caller can still build
+        a ProjectItem.
+        """
+        import json as _json
+
+        samples_text = (
+            "\n".join(f"- {s}" for s in complaint_summaries[:5])
+            if complaint_summaries
+            else "No complaint summaries available"
+        )
+        fallback_title = hotspot.get(
+            "suggested_project",
+            f"{hotspot.get('category', 'Infrastructure')} Project",
+        )
+
+        prompt = f"""You are a government project analyst in India. Return ONLY valid JSON — no prose, no markdown fences.
+
+Input data:
+- Category: {hotspot.get("category")}
+- Complaint count: {hotspot.get("complaint_count")} submissions
+- Average urgency: {hotspot.get("avg_urgency", 0):.1f}/5
+- Demand score: {hotspot.get("demand_score", 0):.2f}
+- Gap index: {hotspot.get("gap_index", 0):.2f}
+- Priority score: {hotspot.get("priority_score", 0):.2f}/10 (rank #{hotspot.get("priority_rank", "?")})
+- Location: {hotspot.get("center_lat", 0):.4f}°N, {hotspot.get("center_lon", 0):.4f}°E, radius {hotspot.get("radius_km", 2)}km
+- Affected population: {hotspot.get("affected_population", "unknown")}
+
+Citizen complaint summaries:
+{samples_text}
+
+Public infrastructure baseline:
+{infra_facts or "No baseline data available"}
+
+Return exactly this JSON structure:
+{{"title": "<6-10 word specific actionable project title>", "evidence": "<2-3 sentence factual Evidence Log citing complaint count, urgency, and scores>"}}
+
+Rules:
+- title: specific to complaint type, not generic like "Infrastructure Improvement"
+- evidence: formal English, no markdown, cite numbers"""
+
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=384,
+                    safety_settings=_SAFETY_OFF,
+                ),
+            )
+            text = response.text.strip()
+            # Strip markdown code fences if Gemini wraps output
+            if text.startswith("```"):
+                parts = text.split("```")
+                text = parts[1] if len(parts) > 1 else text
+                if text.startswith("json"):
+                    text = text[4:]
+            parsed = _json.loads(text.strip())
+            title = parsed.get("title", "").strip().strip('"').strip("'") or fallback_title
+            evidence = parsed.get("evidence", "").strip() or None
+            log.info(
+                "gemini_project_analysis",
+                rank=hotspot.get("priority_rank"),
+                title=title,
+            )
+            return title, evidence
+        except Exception as exc:
+            log.warning(
+                "gemini_project_analysis_failed",
+                rank=hotspot.get("priority_rank"),
+                error=str(exc),
+            )
+            return fallback_title, None
+
     @retry(
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=8),

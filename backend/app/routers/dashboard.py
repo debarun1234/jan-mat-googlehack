@@ -11,6 +11,7 @@ Endpoints:
   GET  /dashboard/export/csv       — CSV export of ranked recommendations
 """
 
+import asyncio
 import base64
 import math
 import uuid
@@ -212,40 +213,30 @@ async def get_projects(
             projects=[],
         )
 
-    projects = []
-    for row in ranked:
-        evidence_text = None
-        suggested_project = row.get("suggested_project", "")
-        if generate_evidence:
-            try:
-                infra = await bq.get_infrastructure_facts(
-                    constituency_id,
-                    row.get("category", ""),
-                )
-                # Fetch recent complaint summaries for this category to give Gemini context
-                complaint_samples = await bq.get_complaint_samples(
-                    constituency_id, row.get("category", ""), limit=5
-                )
-                # Generate specific project title from real complaint data
-                suggested_project = await gemini.generate_project_title(
-                    hotspot=row,
-                    complaint_summaries=complaint_samples,
-                )
-                evidence_text = await gemini.generate_evidence_log(
-                    hotspot={**row, "suggested_project": suggested_project},
-                    infra_facts=infra.get("summary", ""),
-                )
-            except Exception as e:
-                log.warning(
-                    "evidence_log_failed", rank=row.get("priority_rank"), error=str(e)
-                )
-                evidence_text = None
+    backend_base = "https://janmat-backend-w2w3osjaua-el.a.run.app"
 
-        # Fetch up to 5 complaints with media for this project category
-        raw_media = await bq.get_project_media(
-            constituency_id, row.get("category", ""), limit=5
-        )
-        backend_base = "https://janmat-backend-w2w3osjaua-el.a.run.app"
+    async def _process_project(row: dict) -> ProjectItem:
+        """Process one ranked project: parallel BQ + single Gemini call."""
+        suggested_project = row.get("suggested_project", "")
+        evidence_text = None
+        category = row.get("category", "")
+
+        if generate_evidence:
+            # All three BQ queries are independent — run them in parallel
+            infra, complaint_samples, raw_media = await asyncio.gather(
+                bq.get_infrastructure_facts(constituency_id, category),
+                bq.get_complaint_samples(constituency_id, category, limit=5),
+                bq.get_project_media(constituency_id, category, limit=5),
+            )
+            # One Gemini call returns both title and evidence log
+            suggested_project, evidence_text = await gemini.generate_project_analysis(
+                hotspot=row,
+                complaint_summaries=complaint_samples,
+                infra_facts=infra.get("summary", ""),
+            )
+        else:
+            raw_media = await bq.get_project_media(constituency_id, category, limit=5)
+
         complaint_media = [
             MediaItem(
                 submission_id=m["submission_id"],
@@ -255,25 +246,42 @@ async def get_projects(
             )
             for m in raw_media
         ]
-
-        projects.append(
-            ProjectItem(
-                rank=int(row.get("priority_rank", 0)),
-                category=row.get("category", ""),
-                suggested_project=suggested_project,
-                priority_score=float(row.get("priority_score", 0)),
-                demand_score=float(row.get("demand_score", 0)),
-                gap_index=float(row.get("gap_index", 0)),
-                complaint_count=int(row.get("complaint_count", 0)),
-                avg_urgency=float(row.get("avg_urgency", 0)),
-                affected_population=row.get("affected_population"),
-                center_lat=float(row.get("center_lat", 0)),
-                center_lon=float(row.get("center_lon", 0)),
-                radius_km=float(row.get("radius_km", 2.0)),
-                evidence_log=evidence_text,
-                complaint_media=complaint_media,
-            )
+        return ProjectItem(
+            rank=int(row.get("priority_rank", 0)),
+            category=category,
+            suggested_project=suggested_project,
+            priority_score=float(row.get("priority_score", 0)),
+            demand_score=float(row.get("demand_score", 0)),
+            gap_index=float(row.get("gap_index", 0)),
+            complaint_count=int(row.get("complaint_count", 0)),
+            avg_urgency=float(row.get("avg_urgency", 0)),
+            affected_population=row.get("affected_population"),
+            center_lat=float(row.get("center_lat", 0)),
+            center_lon=float(row.get("center_lon", 0)),
+            radius_km=float(row.get("radius_km", 2.0)),
+            evidence_log=evidence_text,
+            complaint_media=complaint_media,
         )
+
+    # Process all projects concurrently; capture individual failures without
+    # aborting the entire response.
+    raw_results = await asyncio.gather(
+        *[_process_project(row) for row in ranked],
+        return_exceptions=True,
+    )
+
+    projects: list[ProjectItem] = []
+    for i, result in enumerate(raw_results):
+        if isinstance(result, Exception):
+            log.warning(
+                "project_processing_failed",
+                index=i,
+                error=str(result),
+            )
+        else:
+            projects.append(result)
+
+    projects.sort(key=lambda p: p.rank)
 
     return ProjectsResponse(
         constituency_id=constituency_id,

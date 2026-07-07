@@ -623,7 +623,7 @@ tr:last-child td{border-bottom:none}
   </div>
 
   <div class="card" style="margin-bottom:0;padding:0;overflow:hidden">
-    <div id="map"></div>
+    <div id="map" style="width:100%;height:620px;background:#e8eaf0"></div>
   </div>
 
   <!-- Legend (shown in marker mode) -->
@@ -906,7 +906,7 @@ function showPage(name) {
 }
 
 async function onPageLoad(name) {
-  if (name === 'heatmap' && !map && session?.maps_api_key) initMap();
+  if (name === 'heatmap' && !map) initMap();
   else if (name === 'heatmap' && map) refreshMapData();
   if (name === 'projects' && !projectsList.length) loadProjects();
   if (name === 'users') loadUsers();
@@ -1206,7 +1206,10 @@ async function loadProjects() {
 // ── Google Maps — full implementation ─────────────────────────────
 function initMap() {
   if (!session?.maps_api_key) {
-    document.getElementById('map').innerHTML = '<div class="loading">Maps API key not configured</div>';
+    document.getElementById('map').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:1rem;color:#c62828;gap:8px">' +
+      '⚠️ Google Maps API key not configured — set MAPS_API_KEY in Cloud Run environment variables' +
+      '</div>';
     return;
   }
   // Load Maps JS + MarkerClusterer
