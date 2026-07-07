@@ -194,7 +194,21 @@ function apiRoute(method, routePath, handler) {
 }
 
 // ── Dashboard data routes ─────────────────────────────────────────────
-apiRoute("get", "/api/projects",  req => proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: true }));
+// Cache projects+evidence so Gemini is called once, not on every page load/refresh.
+let _projectsCache = null;
+let _projectsCacheTs = 0;
+const PROJECTS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+apiRoute("get", "/api/projects", async req => {
+  const now = Date.now();
+  if (_projectsCache && (now - _projectsCacheTs) < PROJECTS_CACHE_TTL_MS) {
+    return _projectsCache;
+  }
+  const data = await proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: true });
+  _projectsCache = data;
+  _projectsCacheTs = Date.now();
+  return data;
+});
 apiRoute("get", "/api/heatmap",          req => proxyGet(req, "/dashboard/heatmap"));
 apiRoute("get", "/api/map-submissions",  req => proxyGet(req, "/dashboard/map-submissions", { limit: req.query.limit || 1000 }));
 apiRoute("get", "/api/ai-insights",      req => proxyGet(req, "/dashboard/ai-insights",      { days: req.query.days || 90 }));
@@ -306,9 +320,30 @@ app.post("/api/pipeline/run", requireAuth, async (req, res) => {
       steps.push({ step: "evidence", status: "skipped", reason: evErr.message });
     }
 
+    // Bust the projects cache so the next GET picks up fresh rankings + evidence
+    _projectsCache = null;
+    _projectsCacheTs = 0;
+
     res.json({ status: "success", constituency_id, steps, ran_at: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ error: e.message, steps });
+  }
+});
+
+// ── Media proxy ───────────────────────────────────────────────────────
+// Streams submission media (image / audio) from Cloud Run with the MP
+// auth token added server-side so <img> and <audio> tags work in the browser.
+app.get("/api/media/:submission_id", requireAuth, async (req, res) => {
+  try {
+    const r = await axios.get(
+      `${API}/dashboard/media/${req.params.submission_id}`,
+      { headers: authHeader(req), responseType: "arraybuffer", timeout: 30000 }
+    );
+    res.set("Content-Type", r.headers["content-type"] || "application/octet-stream");
+    res.set("Cache-Control", "private, max-age=300");
+    res.send(Buffer.from(r.data));
+  } catch (e) {
+    res.status(e.response?.status || 500).json({ error: e.message });
   }
 });
 

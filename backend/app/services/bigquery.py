@@ -229,6 +229,76 @@ class BigQueryService:
         ]
         return {"summary": "\n".join(lines), "rows": rows}
 
+    async def get_project_media(
+        self, constituency_id: str, category: str, limit: int = 5
+    ) -> list[dict]:
+        """
+        Fetch complaints that have media (image/audio) for a ranked project category.
+        Returns submission_id, input_type, summary_en for the highest-urgency submissions.
+        Used to show photo/audio evidence inside the Ranked Development Projects cards.
+        """
+        sql = f"""
+        SELECT
+            submission_id,
+            input_type,
+            summary_en,
+            urgency_rating
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        WHERE constituency_id = @constituency_id
+          AND category = @category
+          AND raw_input_gcs_uri IS NOT NULL
+          AND raw_input_gcs_uri != ''
+          AND input_type IN ('image', 'audio')
+          AND processing_status = 'processed'
+        ORDER BY urgency_rating DESC, submitted_at DESC
+        LIMIT @limit
+        """
+        try:
+            return await self._run_query(
+                sql,
+                bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                        bigquery.ScalarQueryParameter("category", "STRING", category),
+                        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                    ]
+                ),
+            )
+        except Exception:
+            return []
+
+    async def get_complaint_samples(
+        self, constituency_id: str, category: str, limit: int = 5
+    ) -> list[str]:
+        """
+        Fetch recent complaint summaries for a category — used by Gemini to generate
+        specific project titles rather than the generic CASE-based defaults.
+        """
+        sql = f"""
+        SELECT summary_en
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        WHERE constituency_id = @constituency_id
+          AND category = @category
+          AND summary_en IS NOT NULL
+          AND processing_status = 'processed'
+        ORDER BY urgency_rating DESC, submitted_at DESC
+        LIMIT @limit
+        """
+        try:
+            rows = await self._run_query(
+                sql,
+                bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                        bigquery.ScalarQueryParameter("category", "STRING", category),
+                        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                    ]
+                ),
+            )
+            return [r["summary_en"] for r in rows if r.get("summary_en")]
+        except Exception:
+            return []
+
     async def get_priority_ranking(
         self, constituency_id: str, limit: int = 10
     ) -> list[dict]:

@@ -286,6 +286,44 @@ Write the Evidence Log now:"""
         )
         return evidence
 
+    async def generate_project_title(
+        self,
+        hotspot: dict,
+        complaint_summaries: list[str],
+    ) -> str:
+        """
+        Generate a specific, actionable project title from real complaint data.
+        Replaces the generic CASE-based titles (e.g. 'Road Repair and Paving')
+        with context-aware names like 'Pothole Repair on MG Road Stretch'.
+        """
+        samples_text = "\n".join(f"- {s}" for s in complaint_summaries[:5]) if complaint_summaries else "No samples available"
+        prompt = f"""You are a government project manager in India creating a development project title.
+
+Category: {hotspot.get("category")}
+Number of complaints: {hotspot.get("complaint_count")}
+Location: {hotspot.get("center_lat", 0):.4f}°N, {hotspot.get("center_lon", 0):.4f}°E
+Citizen complaint summaries:
+{samples_text}
+
+Write ONE specific, actionable project title (6–10 words). Be specific about the type of issue from the complaints.
+Do NOT use generic phrases like "Infrastructure Improvement". Do NOT use markdown or punctuation at the end.
+Output ONLY the title:"""
+
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.3,
+                    max_output_tokens=32,
+                    safety_settings=_SAFETY_OFF,
+                ),
+            )
+            title = response.text.strip().strip('"').strip("'")
+            return title if title else hotspot.get("suggested_project", f"{hotspot.get('category')} Infrastructure Project")
+        except Exception:
+            return hotspot.get("suggested_project", f"{hotspot.get('category')} Infrastructure Project")
+
     @retry(
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=8),

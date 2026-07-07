@@ -152,6 +152,13 @@ async def login(
 # ── Projects ─────────────────────────────────────────────────────────
 
 
+class MediaItem(BaseModel):
+    submission_id: str
+    input_type: str          # "image" | "audio"
+    summary_en: str | None = None
+    media_url: str           # proxied via /dashboard/media/<id>
+
+
 class ProjectItem(BaseModel):
     rank: int
     category: str
@@ -166,6 +173,7 @@ class ProjectItem(BaseModel):
     center_lon: float
     radius_km: float
     evidence_log: str | None = None
+    complaint_media: list[MediaItem] = []
 
 
 class ProjectsResponse(BaseModel):
@@ -207,27 +215,52 @@ async def get_projects(
     projects = []
     for row in ranked:
         evidence_text = None
+        suggested_project = row.get("suggested_project", "")
         if generate_evidence:
             try:
                 infra = await bq.get_infrastructure_facts(
                     constituency_id,
                     row.get("category", ""),
                 )
-                evidence_text = await gemini.generate_evidence_log(
+                # Fetch recent complaint summaries for this category to give Gemini context
+                complaint_samples = await bq.get_complaint_samples(
+                    constituency_id, row.get("category", ""), limit=5
+                )
+                # Generate specific project title from real complaint data
+                suggested_project = await gemini.generate_project_title(
                     hotspot=row,
+                    complaint_summaries=complaint_samples,
+                )
+                evidence_text = await gemini.generate_evidence_log(
+                    hotspot={**row, "suggested_project": suggested_project},
                     infra_facts=infra.get("summary", ""),
                 )
             except Exception as e:
                 log.warning(
                     "evidence_log_failed", rank=row.get("priority_rank"), error=str(e)
                 )
-                evidence_text = f"Evidence generation unavailable: {str(e)}"
+                evidence_text = None
+
+        # Fetch up to 5 complaints with media for this project category
+        raw_media = await bq.get_project_media(
+            constituency_id, row.get("category", ""), limit=5
+        )
+        backend_base = "https://janmat-backend-w2w3osjaua-el.a.run.app"
+        complaint_media = [
+            MediaItem(
+                submission_id=m["submission_id"],
+                input_type=m["input_type"],
+                summary_en=m.get("summary_en"),
+                media_url=f"{backend_base}/dashboard/media/{m['submission_id']}",
+            )
+            for m in raw_media
+        ]
 
         projects.append(
             ProjectItem(
                 rank=int(row.get("priority_rank", 0)),
                 category=row.get("category", ""),
-                suggested_project=row.get("suggested_project", ""),
+                suggested_project=suggested_project,
                 priority_score=float(row.get("priority_score", 0)),
                 demand_score=float(row.get("demand_score", 0)),
                 gap_index=float(row.get("gap_index", 0)),
@@ -238,6 +271,7 @@ async def get_projects(
                 center_lon=float(row.get("center_lon", 0)),
                 radius_km=float(row.get("radius_km", 2.0)),
                 evidence_log=evidence_text,
+                complaint_media=complaint_media,
             )
         )
 

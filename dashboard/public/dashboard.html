@@ -908,6 +908,7 @@ function showPage(name) {
 async function onPageLoad(name) {
   if (name === 'heatmap' && !map && session?.maps_api_key) initMap();
   else if (name === 'heatmap' && map) refreshMapData();
+  if (name === 'projects' && !projectsList.length) loadProjects();
   if (name === 'users') loadUsers();
   if (name === 'database') loadDBStatus();
   if (name === 'telemetry') { loadTelemetry(); loadHealthGrid(); }
@@ -1165,9 +1166,28 @@ async function loadProjects() {
               <div class="progress-bar" style="height:10px;margin-bottom:12px">
                 <div class="progress-fill" style="width:${w}%;background:linear-gradient(90deg,#3f51b5,#1a237e)"></div>
               </div>
-              ${p.evidence_log?`<div style="background:#f9fbe7;border-left:3px solid #aed581;padding:12px;border-radius:0 8px 8px 0">
+              ${p.evidence_log?`<div style="background:#f9fbe7;border-left:3px solid #aed581;padding:12px;border-radius:0 8px 8px 0;margin-bottom:10px">
                 <div style="font-size:.65rem;font-weight:700;color:#558b2f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔍 Evidence Log</div>
                 <div style="font-size:.82rem;color:#37474f;line-height:1.6">${p.evidence_log}</div>
+              </div>`:''}
+              ${p.complaint_media?.length?`
+              <div style="margin-bottom:10px">
+                <div style="font-size:.65rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📎 Citizen Evidence (${p.complaint_media.length})</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+                  ${p.complaint_media.map(m => m.input_type==='image'
+                    ? `<div style="position:relative">
+                         <img src="/api/media/${m.submission_id}"
+                              style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block;cursor:pointer"
+                              title="${(m.summary_en||'').replace(/"/g,'')}"
+                              onclick="window.open('/api/media/${m.submission_id}','_blank')"
+                              onerror="this.parentElement.style.display='none'">
+                       </div>`
+                    : `<div style="background:#f5f5f5;border-radius:8px;padding:10px;border:1px solid #ddd;min-width:220px;max-width:280px">
+                         <div style="font-size:.7rem;color:#555;margin-bottom:5px;line-height:1.4">🎙️ ${(m.summary_en||'Audio complaint').substring(0,70)}${(m.summary_en||'').length>70?'…':''}</div>
+                         <audio controls src="/api/media/${m.submission_id}" style="width:100%;height:32px" preload="none"></audio>
+                       </div>`
+                  ).join('')}
+                </div>
               </div>`:''}
               <div style="display:flex;justify-content:flex-end;margin-top:12px">
                 <button class="btn-complete" onclick="openCompletionModal(${i})">
@@ -1300,14 +1320,25 @@ function renderMarkers(pts) {
     marker.addListener('click', () => {
       const urgencyBar = '★'.repeat(Math.min(p.urgency_rating || 0, 5)) +
                          '☆'.repeat(Math.max(5 - (p.urgency_rating || 0), 0));
+      const mediaHtml = p.submission_id
+        ? (p.input_type === 'image'
+            ? `<img src="/api/media/${p.submission_id}"
+                    style="width:100%;border-radius:6px;margin-top:8px;max-height:160px;object-fit:cover;display:block"
+                    onerror="this.style.display='none'">`
+            : p.input_type === 'audio'
+            ? `<audio controls src="/api/media/${p.submission_id}"
+                      style="width:100%;margin-top:8px" preload="none"></audio>`
+            : '')
+        : '';
       infoWindow.setContent(`
-        <div style="font-family:'Segoe UI',sans-serif;max-width:240px;padding:4px">
+        <div style="font-family:'Segoe UI',sans-serif;max-width:260px;padding:4px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
             <strong style="font-size:.9rem">${p.category}</strong>
           </div>
           <div style="font-size:.78rem;color:#e65100;margin-bottom:6px">${urgencyBar} Urgency ${p.urgency_rating || '?'}/5</div>
           <div style="font-size:.82rem;color:#333;line-height:1.4">${p.summary_en || 'No summary available'}</div>
+          ${mediaHtml}
           <div style="font-size:.72rem;color:#999;margin-top:8px">${p.input_type || ''} · ${p.date || ''}</div>
         </div>
       `);
