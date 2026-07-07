@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>JanMat — People's Priority Engine</title>
+<link rel="icon" href="citizen_logo.jpeg" type="image/jpeg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1a237e;--primary-mid:#3949ab;--primary-light:#5c6bc0;
+  --accent:#00bcd4;--accent2:#ff6b35;--accent3:#7c4dff;
+  --glass:rgba(255,255,255,0.12);--glass-border:rgba(255,255,255,0.2);
+  --glass-dark:rgba(10,15,60,0.6);
+  --text-dark:#0d1117;--text-muted:#546e7a;
+  --surface:#f0f4ff;--card:#ffffff;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--surface);color:var(--text-dark);overflow-x:hidden}
+
+/* ── Utility ── */
+.container{max-width:1160px;margin:0 auto;padding:0 24px}
+.tag{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:.75rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.tag-blue{background:rgba(63,81,181,.12);color:var(--primary-mid)}
+.tag-teal{background:rgba(0,188,212,.12);color:#00838f}
+.tag-orange{background:rgba(255,107,53,.12);color:#d84315}
+.tag-purple{background:rgba(124,77,255,.12);color:#5e35b1}
+.gradient-text{background:linear-gradient(135deg,#00e5ff,#7c4dff,#ff6b35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;transition:all .3s;cursor:pointer;border:none}
+.btn-primary{background:linear-gradient(135deg,#3949ab,#1a237e);color:#fff;box-shadow:0 8px 32px rgba(26,35,126,.35)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(26,35,126,.5)}
+.btn-glass{background:var(--glass);color:#fff;border:1.5px solid var(--glass-border);backdrop-filter:blur(12px)}
+.btn-glass:hover{background:rgba(255,255,255,.22);transform:translateY(-2px)}
+.btn-teal{background:linear-gradient(135deg,#00bcd4,#00838f);color:#fff;box-shadow:0 8px 28px rgba(0,188,212,.35)}
+.btn-teal:hover{transform:translateY(-2px);box-shadow:0 12px 36px rgba(0,188,212,.5)}
+.btn-orange{background:linear-gradient(135deg,#ff6b35,#e64a19);color:#fff;box-shadow:0 8px 28px rgba(255,107,53,.35)}
+.btn-orange:hover{transform:translateY(-2px);box-shadow:0 12px 36px rgba(255,107,53,.5)}
+.section-label{font-size:.75rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--primary-light);margin-bottom:12px}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:clamp(2rem,4vw,3rem);font-weight:700;line-height:1.15;margin-bottom:16px}
+.section-sub{font-size:1.05rem;color:var(--text-muted);line-height:1.7;max-width:640px}
+
+/* ── Noise overlay ── */
+body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4}
+
+/* ── HERO ── */
+#hero{min-height:100vh;background:linear-gradient(135deg,#0d1b6e 0%,#1a237e 30%,#283593 55%,#1565c0 75%,#0097a7 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:100px 24px 80px;position:relative;overflow:hidden}
+#hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(0,229,255,.15),transparent),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(124,77,255,.2),transparent),radial-gradient(ellipse 50% 50% at 10% 60%,rgba(255,107,53,.12),transparent);pointer-events:none}
+.hero-orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.4;pointer-events:none;animation:float 8s ease-in-out infinite}
+.orb1{width:500px;height:500px;background:radial-gradient(circle,#7c4dff,transparent 70%);top:-200px;right:-100px}
+.orb2{width:400px;height:400px;background:radial-gradient(circle,#00e5ff,transparent 70%);bottom:-150px;left:-100px;animation-delay:-4s}
+.orb3{width:300px;height:300px;background:radial-gradient(circle,#ff6b35,transparent 70%);top:40%;right:10%;animation-delay:-2s}
+@keyframes float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-30px) scale(1.05)}}
+.hero-badge{display:flex;align-items:center;gap:8px;padding:8px 18px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:24px;color:rgba(255,255,255,.9);font-size:.8rem;font-weight:600;letter-spacing:.5px;margin-bottom:28px;backdrop-filter:blur(12px)}
+.hero-badge::before{content:'';width:8px;height:8px;border-radius:50%;background:#00e5ff;animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,229,255,.6)}50%{opacity:.6;box-shadow:0 0 0 8px transparent}}
+.hero-logo{width:72px;height:72px;border-radius:20px;object-fit:cover;border:3px solid rgba(255,255,255,.3);margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.hero-logo-fallback{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#3949ab,#7c4dff);display:flex;align-items:center;justify-content:center;font-size:2rem;margin-bottom:24px;border:3px solid rgba(255,255,255,.3);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+h1.hero-title{font-family:'Space Grotesk',sans-serif;font-size:clamp(3rem,7vw,5.5rem);font-weight:800;color:#fff;line-height:1.05;letter-spacing:-2px;margin-bottom:12px}
+h1.hero-title span{background:linear-gradient(135deg,#00e5ff,#b39ddb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-tagline{font-size:clamp(1rem,2.5vw,1.35rem);color:rgba(255,255,255,.8);line-height:1.6;max-width:660px;margin:0 auto 40px;font-weight:400}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:64px}
+.hero-stats{display:flex;gap:40px;flex-wrap:wrap;justify-content:center}
+.hero-stat{text-align:center;color:#fff}
+.hero-stat-num{font-family:'Space Grotesk',sans-serif;font-size:2.2rem;font-weight:800;background:linear-gradient(135deg,#00e5ff,#b39ddb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-stat-label{font-size:.78rem;color:rgba(255,255,255,.65);font-weight:500;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.hero-scroll{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;color:rgba(255,255,255,.5);font-size:.75rem;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+.hero-scroll svg{opacity:.5}
+
+/* ── WAVE DIVIDER ── */
+.wave{width:100%;overflow:hidden;line-height:0;margin-top:-2px}
+.wave svg{display:block;width:100%}
+
+/* ── PROBLEM ── */
+#problem{padding:100px 0;background:#fff}
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;margin-top:52px}
+.problem-card{padding:24px 28px;border-radius:16px;border-left:4px solid;margin-bottom:16px}
+.problem-card.bad{background:#fff3f0;border-color:#ff5252}
+.problem-card.bad .p-title{color:#c62828;font-weight:700;font-size:.95rem;margin-bottom:6px}
+.problem-card.bad p{color:#bf360c;font-size:.88rem;line-height:1.6}
+.problem-visual{position:relative}
+.problem-quote{background:linear-gradient(135deg,#e8eaf6,#ede7f6);border-radius:20px;padding:36px;position:relative;overflow:hidden}
+.problem-quote::before{content:'"';font-size:8rem;color:rgba(63,81,181,.1);position:absolute;top:-20px;left:10px;font-family:Georgia,serif;line-height:1}
+.problem-quote p{font-size:1.15rem;line-height:1.7;color:var(--primary);font-style:italic;position:relative;z-index:1;font-weight:500}
+.problem-quote .attr{margin-top:16px;font-size:.85rem;color:var(--primary-light);font-weight:600;font-style:normal}
+
+/* ── WHY JanMat ── */
+#why{padding:100px 0;background:linear-gradient(180deg,#f0f4ff 0%,#e8eaf6 100%)}
+.why-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:52px}
+.why-card{background:#fff;border-radius:20px;padding:32px;border:1px solid rgba(63,81,181,.1);transition:all .3s;position:relative;overflow:hidden}
+.why-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(63,81,181,.04),rgba(124,77,255,.04));opacity:0;transition:.3s}
+.why-card:hover{transform:translateY(-6px);box-shadow:0 20px 60px rgba(26,35,126,.12);border-color:rgba(63,81,181,.25)}
+.why-card:hover::before{opacity:1}
+.why-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:20px}
+.why-card h3{font-family:'Space Grotesk',sans-serif;font-size:1.15rem;font-weight:700;margin-bottom:10px;color:var(--primary)}
+.why-card p{font-size:.9rem;color:var(--text-muted);line-height:1.65}
+.vs-table{background:#fff;border-radius:20px;padding:40px;margin-top:52px;border:1px solid rgba(63,81,181,.1);overflow-x:auto}
+.vs-table table{width:100%;border-collapse:collapse}
+.vs-table th{padding:14px 20px;text-align:left;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e8eaf6}
+.vs-table th:first-child{color:var(--text-muted)}
+.vs-table th:nth-child(2){color:#e53935}
+.vs-table th:nth-child(3){color:var(--primary);background:#f0f4ff;border-radius:8px 8px 0 0}
+.vs-table td{padding:14px 20px;font-size:.9rem;border-bottom:1px solid #f5f5f5;vertical-align:top;line-height:1.5}
+.vs-table td:nth-child(3){background:#f8f9ff;color:var(--primary-mid);font-weight:500}
+.vs-table tr:last-child td{border-bottom:none}
+
+/* ── FEATURES ── */
+#features{padding:100px 0;background:#fff}
+.features-tabs{display:flex;gap:12px;margin-bottom:52px;flex-wrap:wrap}
+.feat-tab{padding:12px 24px;border-radius:10px;border:2px solid transparent;font-weight:700;font-size:.9rem;cursor:pointer;transition:all .25s;background:#f0f4ff;color:var(--text-muted)}
+.feat-tab.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 6px 24px rgba(26,35,126,.25)}
+.feat-panel{display:none}
+.feat-panel.active{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.feat-card{border-radius:20px;padding:32px;position:relative;overflow:hidden;transition:transform .3s}
+.feat-card:hover{transform:translateY(-4px)}
+.feat-card.mp{background:linear-gradient(135deg,#e8eaf6,#ede7f6)}
+.feat-card.citizen{background:linear-gradient(135deg,#e0f7fa,#e0f2f1)}
+.feat-card-icon{font-size:2.5rem;margin-bottom:16px}
+.feat-card h3{font-family:'Space Grotesk',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:10px;color:var(--primary)}
+.feat-card.citizen h3{color:#00695c}
+.feat-card p{font-size:.88rem;color:var(--text-muted);line-height:1.65}
+.feat-highlight{display:inline-block;margin-top:12px;padding:4px 10px;border-radius:6px;font-size:.75rem;font-weight:700}
+.feat-card.mp .feat-highlight{background:rgba(63,81,181,.12);color:var(--primary-mid)}
+.feat-card.citizen .feat-highlight{background:rgba(0,150,136,.12);color:#00695c}
+
+/* ── HOW TO TEST ── */
+#howto{padding:100px 0;background:linear-gradient(135deg,#0d1b6e 0%,#1a237e 60%,#283593 100%);position:relative;overflow:hidden}
+#howto::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 80% 0%,rgba(0,229,255,.12),transparent),radial-gradient(ellipse 50% 60% at 20% 100%,rgba(124,77,255,.15),transparent);pointer-events:none}
+#howto .section-label{color:rgba(0,229,255,.8)}
+#howto .section-title{color:#fff}
+#howto .section-sub{color:rgba(255,255,255,.7)}
+.howto-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start;margin-top:60px}
+.howto-col-title{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700;color:#fff;margin-bottom:28px;display:flex;align-items:center;gap:12px}
+.howto-col-title .badge{padding:4px 12px;border-radius:8px;font-size:.75rem;font-weight:700}
+.badge-mp{background:rgba(63,81,181,.5);color:#b3c5ff}
+.badge-citizen{background:rgba(0,188,212,.3);color:#80deea}
+.step{display:flex;gap:16px;margin-bottom:24px;align-items:flex-start}
+.step-num{width:36px;height:36px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:800;color:#fff}
+.step-num.mp{background:linear-gradient(135deg,#3949ab,#7c4dff)}
+.step-num.citizen{background:linear-gradient(135deg,#00bcd4,#00695c)}
+.step-body h4{color:#fff;font-weight:700;font-size:.95rem;margin-bottom:4px}
+.step-body p{color:rgba(255,255,255,.65);font-size:.85rem;line-height:1.6}
+.step-body code{background:rgba(255,255,255,.1);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:.82rem;color:#80deea}
+.cta-block{background:var(--glass);border:1.5px solid var(--glass-border);border-radius:20px;padding:32px;backdrop-filter:blur(12px);margin-top:52px;text-align:center}
+.cta-block p{color:rgba(255,255,255,.75);margin-bottom:20px;font-size:.95rem;line-height:1.6}
+.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ── SCORING ── */
+#scoring{padding:100px 0;background:#fff}
+.score-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;margin-top:52px}
+.formula-box{background:linear-gradient(135deg,#1a237e,#283593);border-radius:24px;padding:48px 40px;color:#fff;text-align:center}
+.formula-box .formula{font-family:'Space Grotesk',sans-serif;font-size:2.2rem;font-weight:800;margin:20px 0;background:linear-gradient(135deg,#00e5ff,#b39ddb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.formula-parts{display:flex;gap:16px;margin-top:28px;flex-wrap:wrap;justify-content:center}
+.formula-part{background:rgba(255,255,255,.1);border-radius:12px;padding:16px 20px;text-align:left;flex:1;min-width:140px}
+.formula-part .var{font-family:'Space Grotesk',sans-serif;font-size:1.4rem;font-weight:800;color:#00e5ff}
+.formula-part .desc{font-size:.78rem;color:rgba(255,255,255,.7);margin-top:4px;line-height:1.4}
+.score-feature{margin-bottom:24px;padding:20px 24px;background:#f8f9ff;border-radius:14px;border-left:4px solid var(--primary-light)}
+.score-feature h4{font-weight:700;color:var(--primary);margin-bottom:6px;font-size:.95rem}
+.score-feature p{font-size:.87rem;color:var(--text-muted);line-height:1.55}
+
+/* ── TECH STACK ── */
+#stack{padding:100px 0;background:linear-gradient(180deg,#f0f4ff,#fff)}
+.stack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:52px}
+.stack-card{background:#fff;border-radius:16px;padding:20px;border:1px solid rgba(63,81,181,.1);text-align:center;transition:all .3s}
+.stack-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(26,35,126,.1);border-color:rgba(63,81,181,.25)}
+.stack-icon{font-size:2rem;margin-bottom:10px}
+.stack-name{font-weight:700;font-size:.9rem;color:var(--primary);margin-bottom:4px}
+.stack-role{font-size:.75rem;color:var(--text-muted)}
+
+/* ── TEAM ── */
+#team{padding:100px 0;background:#fff}
+.team-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:760px;margin:52px auto 0}
+.team-card{border-radius:24px;overflow:hidden;background:linear-gradient(135deg,#1a237e 0%,#283593 50%,#0097a7 100%);padding:2px}
+.team-card-inner{background:#fff;border-radius:22px;padding:40px 36px;text-align:center}
+.team-avatar{width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,#3949ab,#7c4dff);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:800;color:#fff;margin:0 auto 20px;font-family:'Space Grotesk',sans-serif;box-shadow:0 8px 24px rgba(26,35,126,.2)}
+.team-card-inner h3{font-family:'Space Grotesk',sans-serif;font-size:1.35rem;font-weight:700;color:var(--primary);margin-bottom:4px}
+.team-card-inner .role{font-size:.85rem;color:var(--text-muted);margin-bottom:20px}
+.team-links{display:flex;gap:10px;justify-content:center}
+.team-link{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:.8rem;font-weight:600;text-decoration:none;transition:all .25s;border:1.5px solid}
+.team-link.github{border-color:#333;color:#333;background:#f6f8fa}
+.team-link.github:hover{background:#333;color:#fff}
+.team-link.linkedin{border-color:#0077b5;color:#0077b5;background:#e8f4fd}
+.team-link.linkedin:hover{background:#0077b5;color:#fff}
+.team-name-tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.72rem;font-weight:700;letter-spacing:.5px;margin-bottom:16px}
+
+/* ── FOOTER ── */
+footer{background:linear-gradient(135deg,#0d1b6e,#1a237e);padding:48px 24px;text-align:center}
+footer .team-name{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,#00e5ff,#b39ddb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+footer p{color:rgba(255,255,255,.5);font-size:.85rem;margin-bottom:24px}
+footer .footer-links{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+footer .footer-links a{color:rgba(255,255,255,.5);text-decoration:none;font-size:.8rem;transition:.2s}
+footer .footer-links a:hover{color:#00e5ff}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:14px 24px;transition:all .3s}
+nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shadow:0 2px 24px rgba(0,0,0,.2)}
+.nav-inner{max-width:1160px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo img{width:32px;height:32px;border-radius:8px;object-fit:cover}
+.nav-logo span{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1.15rem;color:#fff}
+.nav-links{display:flex;gap:28px;list-style:none}
+.nav-links a{color:rgba(255,255,255,.75);text-decoration:none;font-size:.88rem;font-weight:500;transition:.2s}
+.nav-links a:hover{color:#00e5ff}
+.nav-cta{padding:8px 20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;text-decoration:none;font-size:.85rem;font-weight:600;transition:all .25s}
+.nav-cta:hover{background:rgba(255,255,255,.22)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .problem-grid,.howto-grid,.score-grid,.team-grid{grid-template-columns:1fr}
+  .vs-table{padding:20px}
+  nav .nav-links{display:none}
+}
+
+/* ── ANIMATIONS ── */
+.fade-up{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
+.fade-up.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <img src="citizen_logo.jpeg" alt="JanMat"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div style="display:none;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3949ab,#7c4dff);align-items:center;justify-content:center;color:#fff;font-weight:800">J</div>
+      <span>JanMat</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#why">Why JanMat</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#howto">Try It</a></li>
+      <li><a href="#team">Team</a></li>
+    </ul>
+    <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank" class="nav-cta">Open Dashboard →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-orb orb1"></div>
+  <div class="hero-orb orb2"></div>
+  <div class="hero-orb orb3"></div>
+
+  <div class="hero-badge">🏆 Google AI Hackathon 2025 · Track 1: People's Priorities</div>
+
+  <img src="citizen_logo.jpeg" alt="JanMat" class="hero-logo"
+       onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+  <div class="hero-logo-fallback" style="display:none">⚖️</div>
+
+  <h1 class="hero-title">Jan<span>Mat</span></h1>
+  <p style="color:rgba(255,255,255,.55);font-size:.85rem;letter-spacing:3px;font-weight:600;margin-bottom:16px;text-transform:uppercase">People's Priority Engine</p>
+  <p class="hero-tagline">Turn unstructured citizen voices into ranked, evidence-backed development projects — with zero bias, full transparency, and real infrastructure data.</p>
+
+  <div class="hero-ctas">
+    <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank" class="btn btn-teal">
+      🏛️ Open MP Dashboard
+    </a>
+    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/latest/download/app-release.apk" class="btn btn-orange">
+      📱 Download Citizen App
+    </a>
+    <a href="https://github.com/debarun1234/jan-mat-googlehack" target="_blank" class="btn btn-glass">
+      <svg width="18" height="18" fill="#fff" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      View Source
+    </a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-num">6+</div>
+      <div class="hero-stat-label">Indian Languages</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">3</div>
+      <div class="hero-stat-label">Input Types</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">P=0.6D+0.4G</div>
+      <div class="hero-stat-label">Priority Formula</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">Real-time</div>
+      <div class="hero-stat-label">Pipeline</div>
+    </div>
+  </div>
+
+  <div class="hero-scroll">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+    scroll
+  </div>
+</section>
+
+<!-- WAVE -->
+<div class="wave"><svg viewBox="0 0 1440 80" preserveAspectRatio="none" fill="#fff"><path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z"/></svg></div>
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label fade-up">The Real Problem</div>
+    <h2 class="section-title fade-up">The loudest voice <em style="font-style:normal;color:var(--accent2)">wins.</em><br>That's broken.</h2>
+    <div class="problem-grid">
+      <div class="fade-up">
+        <div class="problem-card bad">
+          <div class="p-title">❌ No Objective Ranking</div>
+          <p>MPs receive hundreds of requests with no way to compare a school upgrade against a road repair against a water supply project — apples to oranges, no data basis.</p>
+        </div>
+        <div class="problem-card bad">
+          <div class="p-title">❌ Urban Bias by Volume</div>
+          <p>Dense city wards generate more complaints. Rural underserved communities with fewer but more critical needs get drowned out by sheer complaint volume.</p>
+        </div>
+        <div class="problem-card bad">
+          <div class="p-title">❌ Language Exclusion</div>
+          <p>Government portals are English-first. Rural citizens who speak Hindi, Kannada, or Tamil have no practical way to submit structured feedback.</p>
+        </div>
+        <div class="problem-card bad">
+          <div class="p-title">❌ Bias-Prone Decisions</div>
+          <p>Without a transparent, data-backed justification, any development decision can be — and often is — challenged as politically motivated.</p>
+        </div>
+      </div>
+      <div class="problem-visual fade-up">
+        <div class="problem-quote">
+          <p>"We kept asking ourselves — in a country of 1.4 billion people, why does a development decision still come down to who speaks the loudest in a room? Data exists. Infrastructure gaps are measurable. Citizen voices are everywhere. The missing piece was a system that could actually connect them."</p>
+          <div class="attr">— Debarun &amp; Richard, Team QuantumDuo</div>
+        </div>
+        <div style="margin-top:24px;background:linear-gradient(135deg,#e0f7fa,#e0f2f1);border-radius:20px;padding:28px">
+          <div style="font-size:.85rem;font-weight:700;color:#00695c;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">What JanMat delivers instead</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:#00897b;font-size:1.1rem">✓</span><span style="font-size:.9rem;color:#00695c;font-weight:500">Ranked project list with numeric priority scores</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:#00897b;font-size:1.1rem">✓</span><span style="font-size:.9rem;color:#00695c;font-weight:500">Population-normalized scoring to protect rural areas</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:#00897b;font-size:1.1rem">✓</span><span style="font-size:.9rem;color:#00695c;font-weight:500">Full Indic language voice pipeline</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:#00897b;font-size:1.1rem">✓</span><span style="font-size:.9rem;color:#00695c;font-weight:500">Evidence Log citing exact Census and NFHS data</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY JANMAT -->
+<section id="why">
+  <div class="container">
+    <div class="section-label fade-up">Our Approach</div>
+    <h2 class="section-title fade-up">Not a chatbot.<br><span class="gradient-text">A deterministic reasoning engine.</span></h2>
+    <p class="section-sub fade-up">Every other hackathon project wraps an LLM around a prompt. JanMat uses Gemini as a <strong>structured parser</strong> — every output is schema-validated and written to BigQuery. No hallucinations, no freeform text.</p>
+
+    <div class="why-grid">
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#e8eaf6,#c5cae9)">🎯</div>
+        <h3>Pydantic-Validated Gemini Output</h3>
+        <p>Gemini is forced to return strict JSON — category, GPS coordinates, urgency rating, and English summary. If it can't parse, the submission fails cleanly rather than producing hallucinated data.</p>
+      </div>
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#e0f7fa,#b2ebf2)">📐</div>
+        <h3>Formula-Driven Priority, Not Opinion</h3>
+        <p>P = 0.6×Demand + 0.4×Gap Index. Demand is complaint volume × urgency normalized per capita. Gap Index is derived from Census 2011 and NFHS-5 — public data, not assumptions.</p>
+      </div>
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#f3e5f5,#e1bee7)">⚡</div>
+        <h3>Parallel Async Pipeline</h3>
+        <p>Dashboard projects load in 3–5 seconds via asyncio.gather(). All BigQuery queries and Gemini calls fire simultaneously per project — not sequentially. One Gemini call returns both title and evidence.</p>
+      </div>
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2)">🔍</div>
+        <h3>Transparent Evidence Log</h3>
+        <p>Every project recommendation comes with a paragraph citing the exact data behind it — complaint count, average urgency, Census enrollment rate, hospital beds per 1000. Fully auditable.</p>
+      </div>
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">🗺️</div>
+        <h3>Real Infrastructure Data</h3>
+        <p>The Gap Index is computed from the public_infrastructure BigQuery table seeded with Census and NFHS data — not guessed. Roads, Water, Sanitation, Health, Education each have specific metrics.</p>
+      </div>
+      <div class="why-card fade-up">
+        <div class="why-icon" style="background:linear-gradient(135deg,#fce4ec,#f8bbd9)">🌍</div>
+        <h3>Rural-First Scoring</h3>
+        <p>Demand scores are divided by affected_population before ranking. A rural ward with 10 critical complaints scores higher than an urban ward with 100 minor complaints of the same type.</p>
+      </div>
+    </div>
+
+    <div class="vs-table fade-up">
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>❌ Typical AI Grievance Portal</th>
+            <th>✅ JanMat</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>AI Role</td><td>Chatbot that summarizes complaints</td><td>Deterministic parser → BigQuery, schema-enforced</td></tr>
+          <tr><td>Languages</td><td>English only</td><td>Voice in Hindi, Kannada, Tamil, Telugu + more via STT + Translation</td></tr>
+          <tr><td>Output</td><td>Count of complaints per keyword</td><td>Ranked projects with numeric priority score + Evidence Log</td></tr>
+          <tr><td>Data Basis</td><td>Volume of complaints</td><td>Complaint density × urgency × infrastructure gap from Census/NFHS</td></tr>
+          <tr><td>Bias Protection</td><td>None (urban areas dominate)</td><td>Population-normalized per 1000 residents</td></tr>
+          <tr><td>Accountability</td><td>Black box recommendation</td><td>Evidence Log cites exact data rows for every recommendation</td></tr>
+          <tr><td>Input Types</td><td>Text form only</td><td>Voice note + Photo + Text in any Indian language</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-label fade-up">Platform Features</div>
+    <h2 class="section-title fade-up">Two interfaces.<br>One connected system.</h2>
+
+    <div class="features-tabs fade-up">
+      <button class="feat-tab active" onclick="switchTab('mp',this)">🏛️ MP Dashboard</button>
+      <button class="feat-tab" onclick="switchTab('citizen',this)">📱 Citizen App</button>
+    </div>
+
+    <div id="panel-mp" class="feat-panel active">
+      <div class="feat-card mp">
+        <div class="feat-card-icon">🏆</div>
+        <h3>Ranked Development Projects</h3>
+        <p>Top projects ranked by Priority Score P = 0.6×D + 0.4×G. Each card shows Gemini-generated title specific to complaint content, evidence log, infrastructure gap, and complaint count.</p>
+        <span class="feat-highlight">CTE dedup — always 1 card per category</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">📎</div>
+        <h3>Media Attachments Per Card</h3>
+        <p>Audio complaints show the full Gemini English summary in a styled callout plus an audio player. Image complaints show a thumbnail with caption. No raw unprocessed files.</p>
+        <span class="feat-highlight">GCS signed URLs</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">🗺️</div>
+        <h3>Demand Heatmap</h3>
+        <p>Google Maps with two modes: circle heatmap (blue→red by complaint density from individual GPS points) and clustered marker view. MAPS_API_KEY injected as Cloud Run env var.</p>
+        <span class="feat-highlight">Replaced deprecated HeatmapLayer v3.65</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">📊</div>
+        <h3>Real-time Overview</h3>
+        <p>Constituency-level stats: total submissions, category breakdown, pipeline status. Auto-refreshes when Pub/Sub priority-updated event fires after each pipeline run.</p>
+        <span class="feat-highlight">10-min server-side cache</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">👤</div>
+        <h3>User Analytics</h3>
+        <p>Citizen registration stats, city and state breakdown, profile completion rate. Phone-auth only — no email, low-friction for rural users.</p>
+        <span class="feat-highlight">Firestore real-time</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">🔐</div>
+        <h3>Google OAuth2 Auth</h3>
+        <p>MP and their office log in with Google. Session-based auth. All credentials in Secret Manager — zero hardcoded secrets. Constituency-scoped data isolation.</p>
+        <span class="feat-highlight">JWT + Google OAuth2</span>
+      </div>
+    </div>
+
+    <div id="panel-citizen" class="feat-panel">
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">🎙️</div>
+        <h3>Voice Submission</h3>
+        <p>Press and speak in any language. Cloud Speech-to-Text transcribes, Translation API normalizes to English, Gemini extracts structured data. A rural citizen can file a complaint in 10 seconds.</p>
+        <span class="feat-highlight">6+ Indic languages supported</span>
+      </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">📷</div>
+        <h3>Photo Complaint</h3>
+        <p>Photograph broken infrastructure. Gemini vision endpoint extracts the issue, estimates severity, identifies category. Stored in Cloud Storage with GCS URI linked to the complaint row.</p>
+        <span class="feat-highlight">Gemini multimodal vision</span>
+      </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">✍️</div>
+        <h3>Text in Your Language</h3>
+        <p>Hindi, Kannada, Tamil, Telugu, Bengali, Marathi — all supported. Gemini handles multilingual parsing directly without a separate translation step for text submissions.</p>
+        <span class="feat-highlight">Multilingual Gemini parsing</span>
+      </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">📋</div>
+        <h3>Submission Result Card</h3>
+        <p>After every submission, citizens see their detected category, urgency rating (1–5 stars), and Gemini English summary — instant confirmation that their voice was heard and processed.</p>
+        <span class="feat-highlight">SubmissionResult widget</span>
+      </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">📈</div>
+        <h3>Personal Stats Dashboard</h3>
+        <p>Home screen shows real counts: total submitted, processed, pending — pulled live from Firestore submission_count and subcollection. No more showing zeros.</p>
+        <span class="feat-highlight">Live from /users/stats API</span>
+      </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">🔄</div>
+        <h3>In-App Updates</h3>
+        <p>Checks GitHub Releases API for newer APK. Downloads and triggers Android installer. Shows "Install started — restart app to complete" after install. No Play Store dependency for POC.</p>
+        <span class="feat-highlight">v1.0.3+3 current</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW TO TEST -->
+<section id="howto">
+  <div class="container">
+    <div class="section-label fade-up">Evaluator Guide</div>
+    <h2 class="section-title fade-up">Test the full pipeline<br>in under 5 minutes.</h2>
+    <p class="section-sub fade-up">Two parallel journeys — try the citizen app to submit complaints, then watch them appear in the MP dashboard after the pipeline runs.</p>
+
+    <div class="howto-grid">
+      <!-- CITIZEN SIDE -->
+      <div class="fade-up">
+        <div class="howto-col-title">
+          📱 Citizen App
+          <span class="badge badge-citizen">Android APK</span>
+        </div>
+
+        <div class="step">
+          <div class="step-num citizen">1</div>
+          <div class="step-body">
+            <h4>Download & Install</h4>
+            <p>Download the APK from the button below. Enable "Install from unknown sources" in Android settings. Install and open.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num citizen">2</div>
+          <div class="step-body">
+            <h4>Sign In with Phone OTP</h4>
+            <p>Enter your phone number → receive Firebase OTP → verify. No email required. Complete your profile with a name and location.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num citizen">3</div>
+          <div class="step-body">
+            <h4>Submit a Voice Complaint</h4>
+            <p>Tap 🎙️ Voice, press record, speak a complaint in Hindi or English (e.g. <code>"Yahan sadak tooti hui hai"</code>). Gemini processes it and shows a result card with detected category and urgency.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num citizen">4</div>
+          <div class="step-body">
+            <h4>Try Photo & Text Too</h4>
+            <p>Photograph something or type a complaint. Each one fires the full pipeline independently — transcription → translation → Gemini → BigQuery → Pub/Sub.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num citizen">5</div>
+          <div class="step-body">
+            <h4>Check Your Stats</h4>
+            <p>Go home — your "Submitted" count increments in real time from Firestore. Every submission you make is tracked.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MP SIDE -->
+      <div class="fade-up">
+        <div class="howto-col-title">
+          🏛️ MP Dashboard
+          <span class="badge badge-mp">Web App</span>
+        </div>
+
+        <div class="step">
+          <div class="step-num mp">1</div>
+          <div class="step-body">
+            <h4>Open the Dashboard</h4>
+            <p>Click the "Open MP Dashboard" button above. Sign in with Google. You'll land on the Overview tab showing constituency stats.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num mp">2</div>
+          <div class="step-body">
+            <h4>Check the Overview</h4>
+            <p>See total complaint count, category breakdown, and pipeline status. This reflects all submissions across the constituency in real time.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num mp">3</div>
+          <div class="step-body">
+            <h4>Run the Pipeline</h4>
+            <p>Click 🔄 Refresh / Recalculate Priorities. This triggers clustering → scoring → Gemini evidence generation. Takes ~15 seconds.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num mp">4</div>
+          <div class="step-body">
+            <h4>View Ranked Projects</h4>
+            <p>Navigate to Projects tab. See ranked development project cards — Roads, Sanitation, Other — each with a Gemini-generated title, evidence paragraph, and any media attachments from citizen submissions.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num mp">5</div>
+          <div class="step-body">
+            <h4>Explore the Heatmap</h4>
+            <p>Click Heatmap tab. Toggle between 🔥 Heat (color-graded density circles) and 📍 Markers (individual clustered complaint pins). Filter by category.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-block fade-up">
+      <p>Both interfaces are live and connected to the same GCP backend (Cloud Run · asia-south1). Submissions made in the citizen app will appear in the MP dashboard after the next pipeline run.</p>
+      <div class="cta-btns">
+        <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank" class="btn btn-teal">🏛️ Open MP Dashboard</a>
+        <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/latest/download/app-release.apk" class="btn btn-orange">📱 Download Android APK</a>
+        <a href="https://github.com/debarun1234/jan-mat-googlehack" target="_blank" class="btn btn-glass">📄 View Source on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCORING -->
+<section id="scoring">
+  <div class="container">
+    <div class="section-label fade-up">The Science</div>
+    <h2 class="section-title fade-up">A formula that can't be<br><span class="gradient-text">lobbied or gamed.</span></h2>
+
+    <div class="score-grid">
+      <div class="formula-box fade-up">
+        <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:2px;text-transform:uppercase">Priority Score Formula</div>
+        <div class="formula">P = 0.6D + 0.4G</div>
+        <div style="color:rgba(255,255,255,.65);font-size:.9rem">Scaled 0–10. Ranked descending.</div>
+        <div class="formula-parts">
+          <div class="formula-part">
+            <div class="var">D</div>
+            <div class="desc">Demand Score<br>complaint_count × avg_urgency ÷ affected_population × 1000<br>Normalized 0–1 within constituency</div>
+          </div>
+          <div class="formula-part">
+            <div class="var">G</div>
+            <div class="desc">Gap Index<br>Infrastructure deficit from Census + NFHS data<br>0 = no gap, 1 = severe gap<br>Defaults to 0.5 when no data</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fade-up">
+        <div class="score-feature">
+          <h4>🏘️ Population Normalization</h4>
+          <p>Demand per 1000 residents prevents dense urban wards from always outranking rural areas. 10 critical rural complaints can outrank 100 urban minor ones.</p>
+        </div>
+        <div class="score-feature">
+          <h4>📊 Real Infrastructure Benchmarks</h4>
+          <p>Roads: road_quality_score/10. Health: hospital_beds_per_1000/3.0. Education: 1 – school_enrollment_rate. Water: piped_water_access_pct/100. All from public datasets.</p>
+        </div>
+        <div class="score-feature">
+          <h4>🔒 Deduplication by Design</h4>
+          <p>SQL uses QUALIFY ROW_NUMBER() OVER (PARTITION BY category) to guarantee one score per category regardless of pipeline run count. BigQuery CTE on read for zero-duplicate dashboard.</p>
+        </div>
+        <div class="score-feature">
+          <h4>⚡ Pub/Sub Triggered</h4>
+          <p>Every citizen submission fires a Pub/Sub message. The pipeline (cluster → score → evidence) runs automatically in background. MP dashboard refreshes on the priority-updated event.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack">
+  <div class="container">
+    <div class="section-label fade-up">Tech Stack</div>
+    <h2 class="section-title fade-up">100% Google Cloud.<br>Entirely serverless.</h2>
+    <div class="stack-grid">
+      <div class="stack-card fade-up"><div class="stack-icon">🤖</div><div class="stack-name">Gemini 2.5 Flash Lite</div><div class="stack-role">Structured extraction + Evidence Log</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">📊</div><div class="stack-name">BigQuery</div><div class="stack-role">Spatial clustering + priority scoring</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🚀</div><div class="stack-name">Cloud Run</div><div class="stack-role">FastAPI backend + Node.js dashboard</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🎙️</div><div class="stack-name">Cloud STT</div><div class="stack-role">Indic language transcription</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🌐</div><div class="stack-name">Translation API</div><div class="stack-role">Multilingual normalization</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">📨</div><div class="stack-name">Pub/Sub</div><div class="stack-role">Async pipeline trigger + DLQ</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">📁</div><div class="stack-name">Cloud Storage</div><div class="stack-role">Audio + image media</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🔥</div><div class="stack-name">Firestore</div><div class="stack-role">User profiles + submission tracking</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🗺️</div><div class="stack-name">Maps Platform</div><div class="stack-role">Heatmap + marker clustering</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">🔐</div><div class="stack-name">Secret Manager</div><div class="stack-role">Zero hardcoded credentials</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">📱</div><div class="stack-name">Flutter</div><div class="stack-role">Cross-platform citizen app</div></div>
+      <div class="stack-card fade-up"><div class="stack-icon">⚡</div><div class="stack-name">FastAPI + asyncio</div><div class="stack-role">Parallel async pipeline</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section id="team">
+  <div class="container">
+    <div class="section-label fade-up" style="text-align:center">The Builders</div>
+    <h2 class="section-title fade-up" style="text-align:center">Team <span class="gradient-text">QuantumDuo</span></h2>
+    <p class="section-sub fade-up" style="text-align:center;margin:0 auto">Two engineers, one mission — build the civic tech infrastructure that holds democracy accountable to data.</p>
+
+    <div class="team-grid">
+      <div class="team-card fade-up">
+        <div class="team-card-inner">
+          <div class="team-avatar">DG</div>
+          <div class="tag tag-blue" style="margin-bottom:12px">Backend · AI Pipeline</div>
+          <h3>Debarun Ghosh</h3>
+          <div class="role">FastAPI · BigQuery · Gemini · GCP Architecture</div>
+          <div class="team-links">
+            <a href="https://github.com/debarun1234" target="_blank" class="team-link github">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              debarun1234
+            </a>
+            <a href="https://www.linkedin.com/in/debarunghosh2024/" target="_blank" class="team-link linkedin">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              LinkedIn
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="team-card fade-up">
+        <div class="team-card-inner">
+          <div class="team-avatar" style="background:linear-gradient(135deg,#00bcd4,#00695c)">RJ</div>
+          <div class="tag tag-teal" style="margin-bottom:12px">Frontend · Flutter</div>
+          <h3>Richard Joy Y</h3>
+          <div class="role">Flutter · Node.js · Dashboard · UX Design</div>
+          <div class="team-links">
+            <a href="https://github.com/vaderrex" target="_blank" class="team-link github">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              vaderrex
+            </a>
+            <a href="https://www.linkedin.com/in/richard-joy-52b654266/" target="_blank" class="team-link linkedin">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              LinkedIn
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:40px;padding:32px;background:linear-gradient(135deg,#e8eaf6,#ede7f6);border-radius:20px" class="fade-up">
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:700;color:var(--primary);margin-bottom:8px">Team QuantumDuo</div>
+      <p style="color:var(--text-muted);font-size:.9rem;line-height:1.6;max-width:540px;margin:0 auto">Built end-to-end in under 72 hours for the Google AI Hackathon 2025. Every component is production-grade and deployed on GCP asia-south1.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="team-name">JanMat</div>
+  <p>People's Priority Engine · Google AI Hackathon 2025 · Track 1 · Team QuantumDuo</p>
+  <div class="footer-links">
+    <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank">MP Dashboard</a>
+    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/latest/download/app-release.apk">Download APK</a>
+    <a href="https://github.com/debarun1234/jan-mat-googlehack" target="_blank">GitHub</a>
+    <a href="https://github.com/debarun1234" target="_blank">@debarun1234</a>
+    <a href="https://github.com/vaderrex" target="_blank">@vaderrex</a>
+  </div>
+</footer>
+
+<script>
+// Nav scroll
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// Tab switching
+function switchTab(id, btn) {
+  document.querySelectorAll('.feat-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.feat-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+// Fade-up intersection observer
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
