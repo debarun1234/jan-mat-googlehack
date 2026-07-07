@@ -316,11 +316,23 @@ async def get_map_submissions(
 ):
     """
     Individual submission geo-points for the marker/cluster view.
-    Anonymised — no personal data, no submission IDs.
+    Includes submission_id + media_url so the MP dashboard can show image/audio.
     """
     constituency_id = mp.get("constituency_id", settings.constituency_id)
+    backend_base = f"https://janmat-backend-w2w3osjaua-el.a.run.app"
     try:
-        points = await bq.get_submission_points(constituency_id, limit=limit)
+        points = await bq.get_submission_points(
+            constituency_id, limit=limit, include_media=True
+        )
+        # Attach media_url for any submission that has a GCS file
+        for p in points:
+            sub_id = p.pop("submission_id", None)
+            gcs = p.pop("raw_input_gcs_uri", None)
+            if sub_id and gcs:
+                p["submission_id"] = sub_id
+                p["media_url"] = f"{backend_base}/dashboard/media/{sub_id}"
+            else:
+                p["media_url"] = None
         return {
             "constituency_id": constituency_id,
             "points": points,
@@ -328,6 +340,59 @@ async def get_map_submissions(
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/media/{submission_id}")
+async def get_submission_media_mp(
+    submission_id: str,
+    mp: Annotated[dict, Depends(_get_current_mp)],
+    bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    gcs: Annotated[StorageService, Depends(get_storage_service)],
+):
+    """
+    Stream raw image or audio for any submission in the MP's constituency.
+    Used by the MP dashboard to display images and play audio recordings inline.
+    """
+    from fastapi.responses import Response as FastResponse
+
+    # Look up GCS URI from BigQuery
+    constituency_id = mp.get("constituency_id", "KA-BLR-NORTH-01")
+    sql = f"""
+    SELECT raw_input_gcs_uri, input_type
+    FROM `{bq._project}.{bq._analytics_ds}.citizen_grievances`
+    WHERE submission_id = @submission_id
+      AND constituency_id = @constituency_id
+    LIMIT 1
+    """
+    from google.cloud import bigquery as gcbq
+    rows = await bq._run_query(
+        sql,
+        gcbq.QueryJobConfig(
+            query_parameters=[
+                gcbq.ScalarQueryParameter("submission_id", "STRING", submission_id),
+                gcbq.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+            ]
+        ),
+    )
+    if not rows or not rows[0].get("raw_input_gcs_uri"):
+        raise HTTPException(status_code=404, detail="No media for this submission")
+
+    gcs_uri = rows[0]["raw_input_gcs_uri"]
+    input_type = rows[0].get("input_type", "image")
+    default_ct = "audio/mp4" if input_type == "audio" else "image/jpeg"
+
+    try:
+        data, content_type = await gcs.download_bytes(gcs_uri)
+        if content_type == "application/octet-stream":
+            content_type = default_ct
+        return FastResponse(
+            content=data,
+            media_type=content_type,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+    except Exception as exc:
+        log.error("mp_media_download_failed", gcs_uri=gcs_uri, error=str(exc))
+        raise HTTPException(status_code=500, detail="Media unavailable")
 
 
 # ── Trends ────────────────────────────────────────────────────────────
@@ -342,7 +407,6 @@ async def get_trends(
 ):
     """Category complaint trends over the past N days."""
     constituency_id = mp.get("constituency_id", settings.constituency_id)
-    client = bq._get_client()
 
     from google.cloud import bigquery as gcbq
 
@@ -360,9 +424,9 @@ async def get_trends(
     ORDER BY date ASC, count DESC
     """
     try:
-        job = client.query(
+        rows = await bq._run_query(
             sql,
-            job_config=gcbq.QueryJobConfig(
+            gcbq.QueryJobConfig(
                 query_parameters=[
                     gcbq.ScalarQueryParameter(
                         "constituency_id", "STRING", constituency_id
@@ -371,7 +435,6 @@ async def get_trends(
                 ]
             ),
         )
-        rows = [dict(r) for r in job.result()]
         return {
             "constituency_id": constituency_id,
             "period_days": days,

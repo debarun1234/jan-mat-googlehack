@@ -104,7 +104,7 @@ class AboutScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: JanMatTheme.border),
                     ),
-                    child: const Text('Version 1.0.0', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 12)),
+                    child: const Text('Version 1.0.1', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 12)),
                   ),
                   const SizedBox(height: 10),
                   const Text('© 2025 JanMat. All rights reserved.', style: TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),

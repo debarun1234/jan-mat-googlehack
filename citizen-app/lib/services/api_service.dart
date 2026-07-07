@@ -94,4 +94,21 @@ class ApiService {
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (_) { return []; }
   }
+
+  // ── Media fetch (image / audio bytes for history detail) ───────────
+  Future<List<int>?> getMediaBytes(String submissionId, String token) async {
+    try {
+      final r = await _dio.get(
+        '/intake/media/$submissionId',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          responseType: ResponseType.bytes,
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      return r.data as List<int>?;
+    } catch (_) {
+      return null;
+    }
+  }
 }

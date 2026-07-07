@@ -353,11 +353,30 @@ async def get_citizen_heatmap(
         if category:
             data = [d for d in data if d.get("category") == category]
 
+        # Fallback: if demand_hotspots is empty (pipeline not yet run), show
+        # individual submission points from citizen_grievances so the map is
+        # never blank for a constituency that has real complaints.
+        if not data:
+            sub_points = await bq.get_submission_points(constituency_id, limit=500)
+            data = [
+                {
+                    "lat": p["lat"],
+                    "lng": p["lng"],
+                    "weight": int(p.get("urgency_rating") or 3),
+                    "category": p.get("category", "Other"),
+                    "avg_urgency": float(p.get("urgency_rating") or 3.0),
+                }
+                for p in sub_points
+                if p.get("lat") and p.get("lng")
+            ]
+            if category:
+                data = [d for d in data if d.get("category") == category]
+
         return {
             "constituency_id": constituency_id,
             "pin_code": pin_code,
             "category_filter": category,
-            "hotspots": data,
+            "heatmap": data,          # Flutter reads data['heatmap']
             "total_hotspots": len(data),
             "categories_available": list({d.get("category") for d in data}),
             "transparency_note": (

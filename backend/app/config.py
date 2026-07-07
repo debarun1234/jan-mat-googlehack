@@ -15,9 +15,12 @@ class Settings(BaseSettings):
     gcp_project_id: str
     gcp_region: str = "asia-south1"
 
-    # Gemini / Vertex AI
-    gemini_model: str = "gemini-3.1-flash-lite"  # Vertex AI via google-genai SDK
-    # gemini-3.1-flash-lite is available at global/us/eu endpoints only, NOT us-central1
+    # Gemini — google-genai SDK
+    # Priority: GEMINI_API_KEY set → AI Studio endpoint (fastest, no Vertex quota)
+    #           GEMINI_API_KEY not set → Vertex AI via ADC (Cloud Run service account)
+    # gemini-3.1-flash-lite is only available at global/us/eu Vertex endpoints, NOT us-central1
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_api_key: str = ""   # set via Secret Manager; empty = fall back to Vertex AI
     gemini_region: str = "global"
 
     # Cloud SQL (injected as DATABASE_URL from Secret Manager)

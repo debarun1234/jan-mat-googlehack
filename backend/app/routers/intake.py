@@ -24,6 +24,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import Response
 from google.cloud import firestore
 from pydantic import BaseModel, Field
 
@@ -78,6 +79,8 @@ async def _track_submission(
     summary: str,
     lat: float | None,
     lng: float | None,
+    raw_gcs_uri: str = "",
+    media_content_type: str = "",
 ) -> None:
     """Write submission metadata to Firestore and increment submission_count."""
     try:
@@ -94,6 +97,8 @@ async def _track_submission(
             "latitude": lat,
             "longitude": lng,
             "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "raw_gcs_uri": raw_gcs_uri,
+            "media_content_type": media_content_type,
         }
         await sub_ref.set(record)
         await user_ref.update({"submission_count": firestore.Increment(1)})
@@ -297,10 +302,11 @@ async def submit_audio(
             content_type=audio_file.content_type,
         )
 
-        # Transcribe
+        # Transcribe — pass content_type so Gemini uses correct MIME
         transcript, detected_lang = await speech.transcribe(
             audio_bytes=audio_bytes,
             language_code=language_code,
+            content_type=audio_file.content_type or "audio/mp4",
         )
 
         if not transcript:
@@ -357,6 +363,8 @@ async def submit_audio(
                 grievance.summary_en,
                 latitude,
                 longitude,
+                gcs_uri,
+                audio_file.content_type or "audio/mp4",
             )
 
         return SubmissionResponse(
@@ -470,6 +478,8 @@ async def submit_image(
                 grievance.summary_en,
                 latitude,
                 longitude,
+                gcs_uri,
+                image_file.content_type or "image/jpeg",
             )
 
         return SubmissionResponse(
@@ -488,3 +498,55 @@ async def submit_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Image processing failed: {str(exc)}",
         )
+
+
+# ── Citizen media proxy ───────────────────────────────────────────────
+
+
+@router.get("/media/{submission_id}")
+async def get_submission_media(
+    submission_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[StorageService, Depends(get_storage_service)],
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """
+    Stream the raw image or audio file for a submission owned by the authenticated citizen.
+    Used by the citizen history detail view to show image thumbnails and play audio.
+    """
+    # Auth: require a valid citizen JWT
+    firebase_uid = _firebase_uid_from_token(authorization)
+    if not firebase_uid:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Look up the submission in Firestore — enforces ownership
+    db = _get_db(settings)
+    sub_doc = await (
+        db.collection("janmat_users")
+        .document(firebase_uid)
+        .collection("submissions")
+        .document(submission_id)
+        .get()
+    )
+    if not sub_doc.exists:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    sub_data = sub_doc.to_dict() or {}
+    gcs_uri = sub_data.get("raw_gcs_uri", "")
+    content_type = sub_data.get("media_content_type", "application/octet-stream")
+
+    if not gcs_uri:
+        raise HTTPException(status_code=404, detail="No media file for this submission")
+
+    try:
+        data, detected_ct = await storage.download_bytes(gcs_uri)
+        # Use stored content_type if we couldn't detect it from the blob
+        final_ct = detected_ct if detected_ct != "application/octet-stream" else content_type
+        return Response(
+            content=data,
+            media_type=final_ct,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+    except Exception as exc:
+        log.error("media_download_failed", gcs_uri=gcs_uri, error=str(exc))
+        raise HTTPException(status_code=500, detail="Media file unavailable")

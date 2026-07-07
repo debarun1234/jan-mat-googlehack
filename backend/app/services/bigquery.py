@@ -227,12 +227,14 @@ class BigQueryService:
     ) -> list[dict]:
         """
         Fetch the latest ranked project list for the MP dashboard.
+        Note: priority_scores table stores the rank column as `rank`, not `priority_rank`.
+        We alias it to `priority_rank` here so callers can use a consistent field name.
         """
         sql = f"""
         SELECT
             ps.hotspot_id,
             ps.category,
-            ps.priority_rank,
+            ps.rank AS priority_rank,
             ps.priority_score,
             ps.demand_score,
             ps.gap_index,
@@ -253,7 +255,7 @@ class BigQueryService:
             FROM `{self._table(self._analytics_ds, "priority_scores")}`
             WHERE constituency_id = @constituency_id
           )
-        ORDER BY ps.priority_rank ASC
+        ORDER BY ps.rank ASC
         LIMIT @limit
         """
         rows = await self._run_query(
@@ -298,12 +300,19 @@ class BigQueryService:
         )
 
     async def get_submission_points(
-        self, constituency_id: str, limit: int = 1000
+        self, constituency_id: str, limit: int = 1000, include_media: bool = False
     ) -> list[dict]:
         """
         Fetch individual submission geo-points for marker view.
-        Returns anonymised points: no submission_id or personal data.
+        By default returns anonymised points (no submission_id, no personal data).
+        Pass include_media=True for the MP dashboard to get submission_id + GCS URI.
         """
+        media_cols = ""
+        if include_media:
+            media_cols = """
+            submission_id,
+            raw_input_gcs_uri,"""
+
         sql = f"""
         SELECT
             latitude   AS lat,
@@ -312,7 +321,7 @@ class BigQueryService:
             urgency_rating,
             summary_en,
             input_type,
-            DATE(submitted_at) AS date
+            DATE(submitted_at) AS date{media_cols}
         FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
         WHERE constituency_id = @constituency_id
           AND latitude  IS NOT NULL
@@ -544,7 +553,7 @@ class BigQueryService:
         """
         import pathlib
 
-        query_dir = pathlib.Path(__file__).parent.parent.parent / "bigquery" / "queries"
+        query_dir = pathlib.Path(__file__).parent.parent.parent / "queries"
         query_file = query_dir / filename
         if query_file.exists():
             sql = query_file.read_text()

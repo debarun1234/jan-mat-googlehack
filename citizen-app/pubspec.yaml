@@ -20,9 +20,10 @@ dependencies:
   # Google Maps + heatmap visualization
   google_maps_flutter: ^2.9.0
 
-  # Audio recording
+  # Audio recording + playback
   record: ^7.1.1
   path_provider: ^2.1.4
+  audioplayers: ^6.1.0
 
   # Image picking
   image_picker: ^1.1.2

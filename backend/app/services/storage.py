@@ -97,6 +97,25 @@ class StorageService:
         log.info("gcs_upload", uri=gcs_uri, bytes=len(data), content_type=content_type)
         return gcs_uri
 
+    async def download_bytes(self, gcs_uri: str) -> tuple[bytes, str]:
+        """
+        Download a GCS object and return (bytes, content_type).
+        Used by media proxy endpoints so the backend streams files to clients.
+        """
+        import asyncio
+
+        object_path = gcs_uri.replace(f"gs://{self._bucket_name}/", "")
+
+        def _sync_download():
+            client = self._get_client()
+            bucket = client.bucket(self._bucket_name)
+            blob = bucket.blob(object_path)
+            data = blob.download_as_bytes()
+            ct = blob.content_type or "application/octet-stream"
+            return data, ct
+
+        return await asyncio.get_event_loop().run_in_executor(None, _sync_download)
+
     async def get_signed_url(self, gcs_uri: str, expiration_seconds: int = 300) -> str:
         """Generate a signed download URL for a GCS object (for debugging/admin only)."""
         object_path = gcs_uri.replace(f"gs://{self._bucket_name}/", "")

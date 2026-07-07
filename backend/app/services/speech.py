@@ -1,15 +1,25 @@
 """
-Cloud Speech-to-Text service — Indic language audio transcription.
+Audio transcription via Gemini (replaces Cloud Speech-to-Text).
 
-Supports: Hindi (hi-IN), Kannada (kn-IN), Tamil (ta-IN), Telugu (te-IN),
-          Bengali (bn-IN), Marathi (mr-IN), Gujarati (gu-IN), English (en-IN)
+Cloud STT was failing because:
+  1. Flutter records .m4a (audio/mp4 / AAC) but STT was configured for WEBM_OPUS.
+  2. Only the first speech segment was captured — longer recordings were truncated.
+
+Gemini handles m4a natively, auto-detects any Indian language, and returns
+the complete transcription in one shot with no segment limit.
 """
 
-import structlog
-from google.cloud import speech_v1 as speech
+import asyncio
+import json
+import logging
+
+from google import genai
+from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-log = structlog.get_logger()
+from app.config import get_settings
+
+log = logging.getLogger(__name__)
 
 # BCP-47 codes for all supported Indic languages
 SUPPORTED_LANGUAGES = [
@@ -23,15 +33,54 @@ SUPPORTED_LANGUAGES = [
     "en-IN",  # Indian English
 ]
 
+_SYSTEM_INSTRUCTION = """You are an expert audio transcription system for a government grievance platform in India.
+Transcribe citizen voice complaints completely and accurately.
+
+Rules:
+- Capture EVERY word — do not summarize, paraphrase, or skip any content
+- The recording may be in Hindi, Kannada, Tamil, Telugu, Bengali, Marathi, Gujarati, English, or a mix
+- Preserve the speaker's exact words
+- If background noise obscures a word, use [unclear] as a placeholder
+- Return ONLY the JSON object specified — no markdown, no extra text
+"""
+
+_TRANSCRIPTION_PROMPT = """Transcribe this audio recording completely and accurately.
+
+Return ONLY a JSON object with exactly these fields:
+{
+    "transcript": "complete verbatim transcription in the original language(s)",
+    "detected_language": "BCP-47 code — one of: hi-IN, kn-IN, ta-IN, te-IN, bn-IN, mr-IN, gu-IN, en-IN",
+    "confidence": 0.95
+}
+
+Transcribe every single word. Missing words = unusable grievance data."""
+
 
 class SpeechService:
-    def __init__(self):
-        self._client: speech.SpeechClient | None = None
+    """
+    Audio transcription using Gemini multimodal.
 
-    def _get_client(self) -> speech.SpeechClient:
-        if self._client is None:
-            self._client = speech.SpeechClient()
-        return self._client
+    Supports m4a / mp4 / webm / ogg / wav / mp3 from the Flutter recorder.
+    Handles mixed-language recordings common in Indian urban areas.
+    """
+
+    def __init__(self):
+        settings = get_settings()
+        api_key = getattr(settings, "gemini_api_key", None)
+        if api_key:
+            self._client = genai.Client(api_key=api_key)
+            log.info("speech_service_init: AI Studio mode")
+        else:
+            self._client = genai.Client(
+                vertexai=True,
+                project=settings.gcp_project_id,
+                location=settings.gemini_region,  # "global"
+            )
+            log.info(
+                "speech_service_init: Vertex AI mode",
+                extra={"project": settings.gcp_project_id, "location": settings.gemini_region},
+            )
+        self._model = settings.gemini_model  # gemini-3.1-flash-lite
 
     @retry(
         stop=stop_after_attempt(3),
@@ -41,64 +90,87 @@ class SpeechService:
     async def transcribe(
         self,
         audio_bytes: bytes,
-        language_code: str = "hi-IN",
-        audio_encoding: speech.RecognitionConfig.AudioEncoding = speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
-        sample_rate_hertz: int = 48000,
+        language_code: str = "auto",
+        content_type: str = "audio/mp4",
+        # Legacy Cloud STT params — kept for API compatibility, unused
+        audio_encoding=None,
+        sample_rate_hertz: int = 0,
     ) -> tuple[str, str]:
         """
-        Transcribe audio bytes to text.
+        Transcribe audio bytes to text via Gemini.
 
-        Returns (transcript_text, detected_language_code).
-        Uses multi-language detection if language_code is 'auto'.
+        Args:
+            audio_bytes: Raw audio file bytes (m4a / mp4 / webm / etc.)
+            language_code: BCP-47 hint or "auto" for auto-detection.
+            content_type: MIME type of audio_bytes (e.g. "audio/mp4").
+
+        Returns:
+            (transcript_text, detected_language_code)
         """
-        client = self._get_client()
+        # Normalise MIME — Gemini requires a specific audio/* type
+        mime = self._normalise_mime(content_type)
 
-        if language_code == "auto":
-            # Primary = Hindi, alternatives = rest of supported languages
-            config = speech.RecognitionConfig(
-                encoding=audio_encoding,
-                sample_rate_hertz=sample_rate_hertz,
-                language_code="hi-IN",
-                alternative_language_codes=SUPPORTED_LANGUAGES[1:],
-                enable_automatic_punctuation=True,
-                model="latest_long",
-            )
-        else:
-            config = speech.RecognitionConfig(
-                encoding=audio_encoding,
-                sample_rate_hertz=sample_rate_hertz,
-                language_code=language_code,
-                alternative_language_codes=[
-                    lc for lc in SUPPORTED_LANGUAGES if lc != language_code
+        def _sync_call() -> str:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[
+                    types.Part.from_bytes(data=audio_bytes, mime_type=mime),
+                    _TRANSCRIPTION_PROMPT,
                 ],
-                enable_automatic_punctuation=True,
-                model="latest_long",
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_INSTRUCTION,
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                ),
             )
+            return response.text
 
-        audio = speech.RecognitionAudio(content=audio_bytes)
+        raw = await asyncio.get_event_loop().run_in_executor(None, _sync_call)
 
-        # Use synchronous recognize for short clips (<60s), long_running for longer
-        if len(audio_bytes) < 2 * 1024 * 1024:  # <2MB → sync
-            response = client.recognize(config=config, audio=audio)
-        else:
-            operation = client.long_running_recognize(config=config, audio=audio)
-            response = operation.result(timeout=120)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # Gemini returned plain text instead of JSON — use it as transcript
+            log.warning("speech_json_parse_failed", raw_preview=raw[:300])
+            return raw.strip(), language_code if language_code != "auto" else "en-IN"
 
-        if not response.results:
-            log.warning("speech_no_results", bytes=len(audio_bytes), lang=language_code)
-            return "", language_code
+        transcript = parsed.get("transcript", "").strip()
+        detected = parsed.get(
+            "detected_language",
+            language_code if language_code != "auto" else "en-IN",
+        )
 
-        # Take highest-confidence alternative from first result
-        best = response.results[0].alternatives[0]
-        detected_lang = getattr(response.results[0], "language_code", language_code)
+        if not transcript:
+            log.warning("speech_empty_transcript", bytes=len(audio_bytes), mime=mime)
+            return "", detected
 
         log.info(
-            "speech_transcription",
-            chars=len(best.transcript),
-            confidence=round(best.confidence, 3),
-            detected_lang=detected_lang,
+            "speech_transcription_complete",
+            extra={
+                "chars": len(transcript),
+                "lang": detected,
+                "confidence": parsed.get("confidence", 0.0),
+                "model": self._model,
+            },
         )
-        return best.transcript, detected_lang
+        return transcript, detected
+
+    @staticmethod
+    def _normalise_mime(content_type: str) -> str:
+        """Map content-type strings to MIME types Gemini accepts for audio."""
+        _MAP = {
+            "audio/mp4": "audio/mp4",
+            "audio/m4a": "audio/mp4",
+            "audio/mpeg": "audio/mpeg",
+            "audio/mp3": "audio/mpeg",
+            "audio/webm": "audio/webm",
+            "audio/ogg": "audio/ogg",
+            "audio/wav": "audio/wav",
+            "audio/x-wav": "audio/wav",
+            "audio/flac": "audio/flac",
+            "audio/aac": "audio/aac",
+        }
+        return _MAP.get(content_type.lower().split(";")[0].strip(), "audio/mp4")
 
 
 _speech_service: SpeechService | None = None

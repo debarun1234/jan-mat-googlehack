@@ -143,11 +143,25 @@ _SAFETY_OFF = [
 class GeminiService:
     def __init__(self):
         settings = get_settings()
-        self._client = genai.Client(
-            vertexai=True,
-            project=settings.gcp_project_id,
-            location=settings.gemini_region,  # us-central1
-        )
+        if settings.gemini_api_key:
+            # AI Studio endpoint — uses GEMINI_API_KEY, no Vertex quota needed
+            log.info("gemini_service_init", mode="ai_studio", model=settings.gemini_model)
+            self._client = genai.Client(api_key=settings.gemini_api_key)
+        else:
+            # Vertex AI — uses Cloud Run service account (ADC), no key needed
+            # gemini-3.1-flash-lite requires location="global" on Vertex
+            log.info(
+                "gemini_service_init",
+                mode="vertex",
+                project=settings.gcp_project_id,
+                location=settings.gemini_region,
+                model=settings.gemini_model,
+            )
+            self._client = genai.Client(
+                vertexai=True,
+                project=settings.gcp_project_id,
+                location=settings.gemini_region,  # "global"
+            )
         self._model = settings.gemini_model  # gemini-3.1-flash-lite
 
     def _extraction_config(self) -> types.GenerateContentConfig:
