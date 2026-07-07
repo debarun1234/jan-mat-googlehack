@@ -315,6 +315,49 @@ async def get_profile(
     return UserResponse(**user)
 
 
+@router.get("/stats")
+async def get_user_stats(
+    current_user: Annotated[dict, Depends(_get_current_user)],
+):
+    """
+    Return real submission stats for the logged-in citizen.
+    total_submissions  — submission_count counter on Firestore user doc
+    processed          — docs in submissions subcollection (tracked after Gemini processing)
+    pending            — total minus tracked (in-flight or tracking failures)
+    by_category        — count per category from subcollection
+    """
+    firebase_uid = current_user["firebase_uid"]
+    db = _get_db()
+
+    # Fetch the user doc for the atomic submission_count
+    user_doc = await db.collection("janmat_users").document(firebase_uid).get()
+    user_data = (user_doc.to_dict() or {}) if user_doc.exists else {}
+    total = user_data.get("submission_count", 0)
+
+    # Pull subcollection to count processed + breakdown by category
+    docs = await (
+        db.collection("janmat_users")
+        .document(firebase_uid)
+        .collection("submissions")
+        .get()
+    )
+    records = [doc.to_dict() for doc in docs]
+    processed = len(records)
+    pending = max(0, total - processed)
+
+    by_category: dict[str, int] = {}
+    for r in records:
+        cat = r.get("category") or "Other"
+        by_category[cat] = by_category.get(cat, 0) + 1
+
+    return {
+        "total_submissions": total,
+        "processed": processed,
+        "pending": pending,
+        "by_category": by_category,
+    }
+
+
 @router.get("/submissions")
 async def get_user_submissions(
     current_user: Annotated[dict, Depends(_get_current_user)],

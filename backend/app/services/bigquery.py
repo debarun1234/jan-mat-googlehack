@@ -380,41 +380,24 @@ class BigQueryService:
     async def get_heatmap_data(self, constituency_id: str) -> list[dict]:
         """
         Fetch lat/lon + weight for Google Maps heatmap layer.
-        Tries demand_hotspots (pipeline output) first; falls back to individual
-        citizen_grievances points so the map is never blank.
-        """
-        hotspot_sql = f"""
-        SELECT
-            center_lat AS lat,
-            center_lon AS lng,
-            complaint_count AS weight,
-            category,
-            avg_urgency
-        FROM `{self._table(self._analytics_ds, "demand_hotspots")}`
-        WHERE constituency_id = @constituency_id
-          AND center_lat IS NOT NULL AND center_lon IS NOT NULL
-          AND ABS(center_lat) BETWEEN 0.001 AND 90
-          AND ABS(center_lon) BETWEEN 0.001 AND 180
-        ORDER BY complaint_count DESC
-        LIMIT 500
+        Uses individual citizen_grievances points (actual GPS coordinates) for
+        accurate density visualisation. Falls back to deduplicated demand_hotspot
+        centroids only when no individual complaints have coordinates.
         """
         params = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
             ]
         )
-        rows = await self._run_query(hotspot_sql, params)
-        if rows:
-            return rows
 
-        # Fallback: pipeline hasn't run yet — surface individual submissions as heatmap points
-        fallback_sql = f"""
+        # Primary: individual complaints → real density spread on the map
+        grievance_sql = f"""
         SELECT
-            latitude          AS lat,
-            longitude         AS lng,
-            urgency_rating    AS weight,
+            latitude                              AS lat,
+            longitude                             AS lng,
+            COALESCE(urgency_rating, 3)           AS weight,
             category,
-            CAST(urgency_rating AS FLOAT64) AS avg_urgency
+            CAST(COALESCE(urgency_rating, 3) AS FLOAT64) AS avg_urgency
         FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
         WHERE constituency_id = @constituency_id
           AND latitude  IS NOT NULL
@@ -424,7 +407,28 @@ class BigQueryService:
         ORDER BY submitted_at DESC
         LIMIT 500
         """
-        return await self._run_query(fallback_sql, params)
+        rows = await self._run_query(grievance_sql, params)
+        if rows:
+            return rows
+
+        # Fallback: no individual complaints with coords — use one centroid per category
+        hotspot_sql = f"""
+        SELECT
+            center_lat    AS lat,
+            center_lon    AS lng,
+            complaint_count AS weight,
+            category,
+            avg_urgency
+        FROM `{self._table(self._analytics_ds, "demand_hotspots")}`
+        WHERE constituency_id = @constituency_id
+          AND center_lat IS NOT NULL AND center_lon IS NOT NULL
+          AND ABS(center_lat) BETWEEN 0.001 AND 90
+          AND ABS(center_lon) BETWEEN 0.001 AND 180
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY category ORDER BY computed_at DESC) = 1
+        ORDER BY complaint_count DESC
+        LIMIT 100
+        """
+        return await self._run_query(hotspot_sql, params)
 
     async def get_submission_points(
         self, constituency_id: str, limit: int = 1000, include_media: bool = False

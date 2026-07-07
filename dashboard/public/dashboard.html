@@ -371,7 +371,7 @@ tr:last-child td{border-bottom:none}
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">
-    <span>⚖️</span>
+    <img src="/mp_logo.jpeg" alt="JanMat" style="height:36px;width:36px;border-radius:50%;object-fit:cover;background:#fff">
     <h1>JanMat</h1>
   </div>
   <div class="topbar-center">
@@ -1299,18 +1299,17 @@ function renderHeatLayer(pts) {
   heatLayer = new google.maps.visualization.HeatmapLayer({
     data,
     map,
-    radius:      60,
-    opacity:     0.85,
-    dissipating: true,
-    maxIntensity: 10,
+    radius:       40,
+    opacity:      0.85,
+    dissipating:  false,
     gradient: [
-      'rgba(26,35,126,0)',
-      'rgba(63,81,181,0.8)',
-      'rgba(0,188,212,1)',
-      'rgba(76,175,80,1)',
-      'rgba(255,235,59,1)',
-      'rgba(255,152,0,1)',
-      'rgba(244,67,54,1)',
+      'rgba(0,0,255,0)',
+      'rgba(0,128,255,1)',
+      'rgba(0,255,200,1)',
+      'rgba(0,255,0,1)',
+      'rgba(255,255,0,1)',
+      'rgba(255,128,0,1)',
+      'rgba(255,0,0,1)',
     ],
   });
 }

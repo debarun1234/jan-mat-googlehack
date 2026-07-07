@@ -423,7 +423,7 @@ All data in transit is encrypted via HTTPS/TLS. Data at rest is encrypted using 
 For privacy concerns, contact: privacy@janmat.in''';
 
 // ── Update Checker ─────────────────────────────────────────────────────
-enum _UpdateState { checking, upToDate, available, downloading, error }
+enum _UpdateState { checking, upToDate, available, downloading, installed, error }
 
 class _UpdateCheckerCard extends StatefulWidget {
   const _UpdateCheckerCard();
@@ -537,8 +537,8 @@ class _UpdateCheckerCardState extends State<_UpdateCheckerCard> {
       if (result.type != ResultType.done) {
         setState(() { _state = _UpdateState.error; _error = result.message; });
       } else {
-        // Installer is open — keep showing "available" in case user dismisses
-        setState(() => _state = _UpdateState.available);
+        // Installer launched — user must complete install then restart the app
+        setState(() => _state = _UpdateState.installed);
       }
     } catch (e) {
       setState(() {
@@ -638,6 +638,14 @@ class _UpdateCheckerCardState extends State<_UpdateCheckerCard> {
             ),
           ),
         ]);
+
+      case _UpdateState.installed:
+        return _UpdateRow(
+          leading: const Icon(Icons.check_circle_rounded, color: Color(0xFF00D4AA), size: 20),
+          label: 'Install started — v$_latestVersion',
+          sub: 'Complete the installation, then restart the app',
+          labelColor: const Color(0xFF00D4AA),
+        );
 
       case _UpdateState.error:
         return _UpdateRow(

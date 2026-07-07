@@ -95,7 +95,13 @@ class _HeroHeader extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                const Icon(Icons.account_balance, color: Colors.white, size: 22),
+                ClipOval(
+                  child: Image.asset(
+                    'assets/citizen_logo.jpeg',
+                    width: 28, height: 28, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.account_balance, color: Colors.white, size: 22),
+                  ),
+                ),
                 const SizedBox(width: 8),
                 const Text('JanMat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
                 const Spacer(),
