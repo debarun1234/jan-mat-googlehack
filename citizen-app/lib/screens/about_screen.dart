@@ -1,4 +1,12 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import '../theme.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -77,6 +85,13 @@ class AboutScreen extends StatelessWidget {
 
               const SizedBox(height: 28),
 
+              // ── App Update ────────────────────────────────────────────
+              _SectionTitle(title: 'App Update', icon: Icons.system_update_alt_rounded),
+              const SizedBox(height: 12),
+              const _UpdateCheckerCard(),
+
+              const SizedBox(height: 28),
+
               // ── Terms & Conditions ────────────────────────────────────
               _SectionTitle(title: 'Legal', icon: Icons.gavel_rounded),
               const SizedBox(height: 12),
@@ -104,7 +119,13 @@ class AboutScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: JanMatTheme.border),
                     ),
-                    child: const Text('Version 1.0.1', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 12)),
+                    child: FutureBuilder<PackageInfo>(
+                      future: PackageInfo.fromPlatform(),
+                      builder: (_, snap) => Text(
+                        'Version ${snap.data?.version ?? '1.0.0'}',
+                        style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 12),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text('© 2025 JanMat. All rights reserved.', style: TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
@@ -400,3 +421,269 @@ All data in transit is encrypted via HTTPS/TLS. Data at rest is encrypted using 
 
 8. Contact
 For privacy concerns, contact: privacy@janmat.in''';
+
+// ── Update Checker ─────────────────────────────────────────────────────
+enum _UpdateState { checking, upToDate, available, downloading, error }
+
+class _UpdateCheckerCard extends StatefulWidget {
+  const _UpdateCheckerCard();
+
+  @override
+  State<_UpdateCheckerCard> createState() => _UpdateCheckerCardState();
+}
+
+class _UpdateCheckerCardState extends State<_UpdateCheckerCard> {
+  static const _kApiUrl =
+      'https://api.github.com/repos/debarun1234/jan-mat-googlehack/releases/latest';
+
+  _UpdateState _state = _UpdateState.checking;
+  String _latestVersion = '';
+  String _downloadUrl = '';
+  double? _progress;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  String _strip(String tag) => tag.startsWith('v') ? tag.substring(1) : tag;
+
+  bool _isNewer(String latest, String current) {
+    try {
+      List<int> p(String v) => v.split('.').map(int.parse).toList();
+      final l = p(latest);
+      final c = p(current);
+      for (var i = 0; i < 3; i++) {
+        final lv = i < l.length ? l[i] : 0;
+        final cv = i < c.length ? c[i] : 0;
+        if (lv > cv) return true;
+        if (lv < cv) return false;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _check() async {
+    if (!mounted) return;
+    setState(() { _state = _UpdateState.checking; _error = ''; });
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 10)));
+      final resp = await dio.get(
+        _kApiUrl,
+        options: Options(headers: {'Accept': 'application/vnd.github.v3+json'}),
+      );
+
+      final tag = (resp.data['tag_name'] as String?) ?? '';
+      _latestVersion = _strip(tag);
+
+      final assets = (resp.data['assets'] as List?) ?? [];
+      final apk = assets.cast<Map>().firstWhere(
+        (a) => (a['name'] as String? ?? '').endsWith('.apk'),
+        orElse: () => <String, dynamic>{},
+      );
+      _downloadUrl = (apk['browser_download_url'] as String?) ?? '';
+
+      if (_latestVersion.isEmpty) {
+        setState(() { _state = _UpdateState.error; _error = 'No release found on GitHub.'; });
+        return;
+      }
+      setState(() {
+        _state = _isNewer(_latestVersion, info.version)
+            ? _UpdateState.available
+            : _UpdateState.upToDate;
+      });
+    } catch (_) {
+      setState(() { _state = _UpdateState.error; _error = 'Could not reach GitHub. Check connection.'; });
+    }
+  }
+
+  Future<void> _download() async {
+    if (_downloadUrl.isEmpty) {
+      setState(() { _state = _UpdateState.error; _error = 'No APK asset found in this release.'; });
+      return;
+    }
+
+    if (Platform.isAndroid) {
+      final status = await Permission.requestInstallPackages.request();
+      if (!status.isGranted) {
+        setState(() {
+          _state = _UpdateState.error;
+          _error = 'Permission denied. Enable "Install unknown apps" in Settings.';
+        });
+        return;
+      }
+    }
+
+    setState(() { _state = _UpdateState.downloading; _progress = 0; });
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/janmat_v$_latestVersion.apk';
+
+      await Dio().download(
+        _downloadUrl,
+        path,
+        onReceiveProgress: (recv, total) {
+          if (mounted && total > 0) setState(() => _progress = recv / total);
+        },
+      );
+
+      final result = await OpenFile.open(path);
+      if (result.type != ResultType.done) {
+        setState(() { _state = _UpdateState.error; _error = result.message; });
+      } else {
+        // Installer is open — keep showing "available" in case user dismisses
+        setState(() => _state = _UpdateState.available);
+      }
+    } catch (e) {
+      setState(() {
+        _state = _UpdateState.error;
+        _error = 'Download failed: ${e.toString().split('\n').first}';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: JanMatTheme.cardBox(),
+      child: _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    switch (_state) {
+      case _UpdateState.checking:
+        return _UpdateRow(
+          leading: const SizedBox(
+            width: 18, height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(JanMatTheme.primary),
+            ),
+          ),
+          label: 'Checking for updates…',
+          sub: 'Connecting to GitHub releases',
+          labelColor: JanMatTheme.textPrimary,
+        );
+
+      case _UpdateState.upToDate:
+        return _UpdateRow(
+          leading: const Icon(Icons.check_circle_rounded, color: Color(0xFF00D4AA), size: 20),
+          label: 'You\'re up to date',
+          sub: 'v$_latestVersion is the latest release',
+          labelColor: const Color(0xFF00D4AA),
+          trailing: TextButton(
+            onPressed: _check,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Re-check', style: TextStyle(fontSize: 12, color: JanMatTheme.primary)),
+          ),
+        );
+
+      case _UpdateState.available:
+        return _UpdateRow(
+          leading: const Icon(Icons.system_update_alt_rounded, color: Color(0xFFFF6B35), size: 20),
+          label: 'Update available — v$_latestVersion',
+          sub: 'Tap to download and install',
+          labelColor: const Color(0xFFFF6B35),
+          trailing: ElevatedButton.icon(
+            onPressed: _download,
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: const Text('Update'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: JanMatTheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        );
+
+      case _UpdateState.downloading:
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.downloading_rounded, color: JanMatTheme.primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Downloading update…',
+                  style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(
+                _progress != null
+                    ? '${(_progress! * 100).toStringAsFixed(0)}%  —  v$_latestVersion'
+                    : 'Starting…',
+                style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 11),
+              ),
+            ])),
+          ]),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _progress,
+              minHeight: 6,
+              backgroundColor: JanMatTheme.border,
+              valueColor: const AlwaysStoppedAnimation<Color>(JanMatTheme.primary),
+            ),
+          ),
+        ]);
+
+      case _UpdateState.error:
+        return _UpdateRow(
+          leading: const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4D6D), size: 20),
+          label: 'Update check failed',
+          sub: _error,
+          labelColor: const Color(0xFFFF4D6D),
+          trailing: TextButton(
+            onPressed: _check,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Retry', style: TextStyle(fontSize: 12, color: JanMatTheme.primary)),
+          ),
+        );
+    }
+  }
+}
+
+class _UpdateRow extends StatelessWidget {
+  final Widget leading;
+  final String label, sub;
+  final Color labelColor;
+  final Widget? trailing;
+
+  const _UpdateRow({
+    required this.leading,
+    required this.label,
+    required this.sub,
+    required this.labelColor,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      leading,
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(color: labelColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(sub, style: const TextStyle(color: JanMatTheme.textSecondary, fontSize: 11, height: 1.4)),
+        if (trailing != null) ...[const SizedBox(height: 8), trailing!],
+      ])),
+    ]);
+  }
+}

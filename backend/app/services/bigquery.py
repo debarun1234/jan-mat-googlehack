@@ -200,17 +200,24 @@ class BigQueryService:
         ORDER BY metric_name
         LIMIT 20
         """
-        rows = await self._run_query(
-            sql,
-            bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter(
-                        "constituency_id", "STRING", constituency_id
-                    ),
-                    bigquery.ScalarQueryParameter("category", "STRING", category),
-                ]
-            ),
-        )
+        try:
+            rows = await self._run_query(
+                sql,
+                bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter(
+                            "constituency_id", "STRING", constituency_id
+                        ),
+                        bigquery.ScalarQueryParameter("category", "STRING", category),
+                    ]
+                ),
+            )
+        except Exception:
+            # public_infrastructure table may not exist or have a different schema
+            # in this deployment — degrade gracefully so evidence generation continues.
+            return {
+                "summary": f"Infrastructure baseline data unavailable for {category} in {constituency_id}"
+            }
         # Format as readable string for Gemini prompt
         if not rows:
             return {
@@ -275,8 +282,10 @@ class BigQueryService:
     async def get_heatmap_data(self, constituency_id: str) -> list[dict]:
         """
         Fetch lat/lon + weight for Google Maps heatmap layer.
+        Tries demand_hotspots (pipeline output) first; falls back to individual
+        citizen_grievances points so the map is never blank.
         """
-        sql = f"""
+        hotspot_sql = f"""
         SELECT
             center_lat AS lat,
             center_lon AS lng,
@@ -288,16 +297,33 @@ class BigQueryService:
         ORDER BY complaint_count DESC
         LIMIT 500
         """
-        return await self._run_query(
-            sql,
-            bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter(
-                        "constituency_id", "STRING", constituency_id
-                    ),
-                ]
-            ),
+        params = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+            ]
         )
+        rows = await self._run_query(hotspot_sql, params)
+        if rows:
+            return rows
+
+        # Fallback: pipeline hasn't run yet — surface individual submissions as heatmap points
+        fallback_sql = f"""
+        SELECT
+            latitude          AS lat,
+            longitude         AS lng,
+            urgency_rating    AS weight,
+            category,
+            CAST(urgency_rating AS FLOAT64) AS avg_urgency
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        WHERE constituency_id = @constituency_id
+          AND latitude  IS NOT NULL
+          AND longitude IS NOT NULL
+          AND ABS(latitude)  BETWEEN 0.001 AND 90
+          AND ABS(longitude) BETWEEN 0.001 AND 180
+        ORDER BY submitted_at DESC
+        LIMIT 500
+        """
+        return await self._run_query(fallback_sql, params)
 
     async def get_submission_points(
         self, constituency_id: str, limit: int = 1000, include_media: bool = False
@@ -309,9 +335,7 @@ class BigQueryService:
         """
         media_cols = ""
         if include_media:
-            media_cols = """
-            submission_id,
-            raw_input_gcs_uri,"""
+            media_cols = ",\n            submission_id,\n            raw_input_gcs_uri"
 
         sql = f"""
         SELECT

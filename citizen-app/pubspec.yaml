@@ -38,6 +38,10 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.20.3
 
+  # In-app update
+  package_info_plus: ^8.1.2
+  open_file: ^3.5.9
+
   # UI
   cupertino_icons: ^1.0.8
   country_code_picker: ^3.0.0 # Phone country code
