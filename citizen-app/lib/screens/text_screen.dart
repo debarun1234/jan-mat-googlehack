@@ -5,6 +5,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../widgets/result_card.dart';
 import 'heatmap_screen.dart';
 
 class TextScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class TextScreen extends StatefulWidget {
 class _TextScreenState extends State<TextScreen> {
   final _ctrl = TextEditingController();
   bool _submitting = false;
-  String? _result;
+  SubmissionResult? _result;
   String? _error;
   int _charCount = 0;
   String? _selectedCategory;
@@ -52,7 +53,7 @@ class _TextScreenState extends State<TextScreen> {
       final svc = ApiService();
       final res = await svc.submitText(text, token: app.token, lat: loc.lat, lng: loc.lng);
       if (mounted) {
-        setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+        setState(() { _result = SubmissionResult.fromMap(res); _submitting = false; });
         app.refreshProfile(); // update submission counter
       }
     } on DioException catch (e) {
@@ -113,7 +114,7 @@ class _TextScreenState extends State<TextScreen> {
                 _ErrorBox(error: _error!),
               ],
             ] else ...[
-              _SuccessBanner(submissionId: _result!),
+              ResultCard(result: _result!),
               const SizedBox(height: 16),
               JMButton(label: 'Submit Another', outlined: true, onPressed: _reset),
             ],
@@ -215,33 +216,6 @@ class _TextField extends StatelessWidget {
   }
 }
 
-
-class _SuccessBanner extends StatelessWidget {
-  final String submissionId;
-  const _SuccessBanner({required this.submissionId});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: JanMatTheme.accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: JanMatTheme.accent.withValues(alpha: 0.3)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.check_circle_rounded, color: JanMatTheme.accent, size: 28),
-          SizedBox(width: 12),
-          Text('Submitted Successfully!', style: TextStyle(color: JanMatTheme.accent, fontWeight: FontWeight.w700, fontSize: 16)),
-        ]),
-        const SizedBox(height: 10),
-        const Text('Your concern has been received and will be processed by AI. It will appear in the MP\'s priority dashboard.', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 13, height: 1.5)),
-        const SizedBox(height: 10),
-        Text('Submission ID: $submissionId', style: const TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
-      ]),
-    );
-  }
-}
 
 class _ErrorBox extends StatelessWidget {
   final String error;

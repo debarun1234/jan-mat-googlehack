@@ -3,6 +3,31 @@ import 'package:dio/dio.dart';
 
 const _kBaseUrl = 'https://janmat-backend-w2w3osjaua-el.a.run.app';
 
+class SubmissionResult {
+  final String submissionId;
+  final String? category;
+  final int? urgencyRating;
+  final String? summaryEn;
+
+  const SubmissionResult({
+    required this.submissionId,
+    this.category,
+    this.urgencyRating,
+    this.summaryEn,
+  });
+
+  factory SubmissionResult.fromMap(Map<String, dynamic> m) {
+    return SubmissionResult(
+      submissionId: m['submission_id'] as String? ?? '',
+      category:     m['category'] as String?,
+      urgencyRating: m['urgency_rating'] != null
+          ? (m['urgency_rating'] as num).round()
+          : null,
+      summaryEn: m['summary_en'] as String?,
+    );
+  }
+}
+
 class ApiService {
   late final Dio _dio;
 

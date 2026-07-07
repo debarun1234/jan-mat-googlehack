@@ -8,6 +8,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../widgets/result_card.dart';
 import 'heatmap_screen.dart';
 
 class AudioScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
   String? _filePath;
   Duration _elapsed = Duration.zero;
   Timer? _timer;
-  String? _result;
+  SubmissionResult? _result;
   String? _error;
   String? _selectedCategory;
 
@@ -90,7 +91,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
       final svc = ApiService();
       final res = await svc.submitAudio(_filePath!, token: app.token, lat: loc.lat, lng: loc.lng);
       if (mounted) {
-        setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+        setState(() { _result = SubmissionResult.fromMap(res); _submitting = false; });
         app.refreshProfile();
       }
     } on DioException catch (e) {
@@ -198,7 +199,7 @@ class _AudioScreenState extends State<AudioScreen> with TickerProviderStateMixin
               const SizedBox(height: 12),
             ],
             if (_result != null) ...[
-              _SuccessBanner(submissionId: _result!),
+              ResultCard(result: _result!),
               const SizedBox(height: 16),
               JMButton(label: 'Submit Another', outlined: true, onPressed: _discard),
               const SizedBox(height: 12),
@@ -275,31 +276,6 @@ Future<void> _showLocationError(BuildContext context, LocationResult loc) {
       ],
     ),
   );
-}
-
-class _SuccessBanner extends StatelessWidget {
-  final String submissionId;
-  const _SuccessBanner({required this.submissionId});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: JanMatTheme.accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: JanMatTheme.accent.withValues(alpha: 0.3)),
-      ),
-      child: Row(children: [
-        const Icon(Icons.check_circle_rounded, color: JanMatTheme.accent, size: 28),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Submitted Successfully!', style: TextStyle(color: JanMatTheme.accent, fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 2),
-          Text('ID: $submissionId', style: const TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
-        ])),
-      ]),
-    );
-  }
 }
 
 class _LanguageNote extends StatelessWidget {

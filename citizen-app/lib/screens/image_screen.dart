@@ -7,6 +7,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../widgets/result_card.dart';
 import 'heatmap_screen.dart';
 
 class ImageScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class _ImageScreenState extends State<ImageScreen> {
   File? _image;
   final _descCtrl = TextEditingController();
   bool _submitting = false;
-  String? _result;
+  SubmissionResult? _result;
   String? _error;
   String? _selectedCategory;
 
@@ -57,7 +58,7 @@ class _ImageScreenState extends State<ImageScreen> {
         lng: loc.lng,
       );
       if (mounted) {
-        setState(() { _result = res['submission_id'] ?? 'submitted'; _submitting = false; });
+        setState(() { _result = SubmissionResult.fromMap(res); _submitting = false; });
         app.refreshProfile();
       }
     } on DioException catch (e) {
@@ -130,7 +131,7 @@ class _ImageScreenState extends State<ImageScreen> {
                 _ErrorBox(error: _error!),
               ],
             ] else ...[
-              _SuccessBanner(submissionId: _result!),
+              ResultCard(result: _result!),
               const SizedBox(height: 16),
               JMButton(label: 'Submit Another', outlined: true, onPressed: _reset),
             ],
@@ -283,29 +284,6 @@ class _ImagePreview extends StatelessWidget {
             ),
           ),
         ),
-      ]),
-    );
-  }
-}
-
-class _SuccessBanner extends StatelessWidget {
-  final String submissionId;
-  const _SuccessBanner({required this.submissionId});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: JanMatTheme.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: JanMatTheme.accent.withValues(alpha: 0.3))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.check_circle_rounded, color: JanMatTheme.accent, size: 28),
-          SizedBox(width: 12),
-          Text('Photo Submitted!', style: TextStyle(color: JanMatTheme.accent, fontWeight: FontWeight.w700, fontSize: 16)),
-        ]),
-        const SizedBox(height: 10),
-        const Text('Your photo has been uploaded and will be analysed by our AI pipeline.', style: TextStyle(color: JanMatTheme.textSecondary, fontSize: 13)),
-        const SizedBox(height: 8),
-        Text('ID: $submissionId', style: const TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
       ]),
     );
   }
