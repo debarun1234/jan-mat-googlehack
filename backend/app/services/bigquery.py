@@ -461,9 +461,16 @@ class BigQueryService:
         clean = []
         for r in rows:
             row = _serialize_bq_row({k: v for k, v in r.items() if k in _HOTSPOT_COLS})
+            # Nullable / optional columns
             row.setdefault("ward_id", None)
             row.setdefault("evidence_log", None)
             row.setdefault("affected_population", None)
+            row.setdefault("suggested_project", "")
+            # Required numeric columns — must never be absent from insert
+            row.setdefault("demand_score", 0.0)
+            row.setdefault("gap_index", 0.0)
+            row.setdefault("priority_score", 0.0)
+            row.setdefault("priority_rank", 0)
             clean.append(row)
 
         client = self._get_client()
@@ -553,7 +560,8 @@ class BigQueryService:
         """
         import pathlib
 
-        query_dir = pathlib.Path(__file__).parent.parent.parent / "queries"
+        # Dockerfile copies backend/queries/ → /app/bigquery/queries/ inside container
+        query_dir = pathlib.Path(__file__).parent.parent.parent / "bigquery" / "queries"
         query_file = query_dir / filename
         if query_file.exists():
             sql = query_file.read_text()
@@ -584,19 +592,28 @@ class BigQueryService:
             SELECT
                 GENERATE_UUID() AS hotspot_id,
                 category,
-                AVG(latitude) AS center_lat,
+                AVG(latitude)  AS center_lat,
                 AVG(longitude) AS center_lon,
-                2.0 AS radius_km,
-                COUNT(*) AS complaint_count,
+                2.0            AS radius_km,
+                COUNT(*)       AS complaint_count,
                 AVG(urgency_rating) AS avg_urgency,
+                CAST(COUNT(*) * 150 AS INT64) AS affected_population,
                 constituency_id,
+                0.0 AS demand_score,
+                0.0 AS gap_index,
+                0.0 AS priority_score,
+                0   AS priority_rank,
+                CONCAT(category, ' improvement') AS suggested_project,
+                NULL AS evidence_log,
                 CURRENT_TIMESTAMP() AS computed_at
             FROM `{p}.{ds}.citizen_grievances`
             WHERE constituency_id = @constituency_id
               AND processing_status = 'processed'
               AND submitted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+              AND latitude  IS NOT NULL
+              AND longitude IS NOT NULL
             GROUP BY category, constituency_id
-            HAVING COUNT(*) >= @min_complaints  -- set to 1 for POC
+            HAVING COUNT(*) >= @min_complaints
             """
         elif filename == "priority_scoring.sql":
             return f"""
