@@ -1174,19 +1174,29 @@ async function loadProjects() {
               <div style="margin-bottom:10px">
                 <div style="font-size:.65rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📎 Citizen Evidence (${p.complaint_media.length})</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
-                  ${p.complaint_media.map(m => m.input_type==='image'
-                    ? `<div style="position:relative">
-                         <img src="/api/media/${m.submission_id}"
-                              style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block;cursor:pointer"
-                              title="${(m.summary_en||'').replace(/"/g,'')}"
-                              onclick="window.open('/api/media/${m.submission_id}','_blank')"
-                              onerror="this.parentElement.style.display='none'">
-                       </div>`
-                    : `<div style="background:#f5f5f5;border-radius:8px;padding:10px;border:1px solid #ddd;min-width:220px;max-width:280px">
-                         <div style="font-size:.7rem;color:#555;margin-bottom:5px;line-height:1.4">🎙️ ${(m.summary_en||'Audio complaint').substring(0,70)}${(m.summary_en||'').length>70?'…':''}</div>
-                         <audio controls src="/api/media/${m.submission_id}" style="width:100%;height:32px" preload="none"></audio>
-                       </div>`
-                  ).join('')}
+                  ${p.complaint_media.map(m => {
+                    if (m.input_type === 'image') {
+                      const caption = (m.summary_en||'').replace(/"/g,'&quot;');
+                      return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;max-width:120px">
+                        <img src="/api/media/${m.submission_id}"
+                             style="width:110px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block;cursor:pointer"
+                             title="${caption}"
+                             onclick="window.open('/api/media/${m.submission_id}','_blank')"
+                             onerror="this.parentElement.style.display='none'">
+                        ${m.summary_en?`<div style="font-size:.65rem;color:#546e7a;line-height:1.3;text-align:center;max-width:110px">${m.summary_en.substring(0,60)}${m.summary_en.length>60?'…':''}</div>`:''}
+                      </div>`;
+                    } else if (m.input_type === 'audio') {
+                      return `<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;border:1px solid #ddd;min-width:240px;max-width:320px">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                          <span style="font-size:.75rem;font-weight:700;color:#1a237e">🎙️ Voice Complaint</span>
+                        </div>
+                        ${m.summary_en?`<div style="font-size:.78rem;color:#37474f;line-height:1.5;margin-bottom:8px;background:#fff;border-radius:6px;padding:8px;border-left:3px solid #5c6bc0">${m.summary_en}</div>`:''}
+                        <audio controls src="/api/media/${m.submission_id}" style="width:100%;height:32px" preload="none"></audio>
+                      </div>`;
+                    } else {
+                      return '';
+                    }
+                  }).join('')}
                 </div>
               </div>`:''}
               <div style="display:flex;justify-content:flex-end;margin-top:12px">
@@ -1271,15 +1281,28 @@ function applyMapFilter(cat) {
 // ── Heatmap layer ──────────────────────────────────────────────────
 function renderHeatLayer(pts) {
   if (heatLayer) heatLayer.setMap(null);
-  if (!pts.length) return;
+
+  // Parse coords — BigQuery may return numbers as strings; filter out invalid/zero points
+  const validPts = pts
+    .map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng), weight: Number(p.weight) || 1 }))
+    .filter(p => !isNaN(p.lat) && !isNaN(p.lng) && Math.abs(p.lat) > 0.001 && Math.abs(p.lng) > 0.001);
+
+  if (!validPts.length) return;
+
+  // Normalise weights to 1–10 so sparse / low-count data is still visible
+  const maxW = Math.max(...validPts.map(p => p.weight), 1);
+  const data  = validPts.map(p => ({
+    location: new google.maps.LatLng(p.lat, p.lng),
+    weight:   Math.max(1, Math.round((p.weight / maxW) * 10)),
+  }));
+
   heatLayer = new google.maps.visualization.HeatmapLayer({
-    data: pts.map(p => ({
-      location: new google.maps.LatLng(p.lat, p.lng),
-      weight: p.weight || 1,
-    })),
+    data,
     map,
-    radius: 40,
-    opacity: 0.8,
+    radius:      60,
+    opacity:     0.85,
+    dissipating: true,
+    maxIntensity: 10,
     gradient: [
       'rgba(26,35,126,0)',
       'rgba(63,81,181,0.8)',

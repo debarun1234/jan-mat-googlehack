@@ -57,6 +57,8 @@ async def run_clustering(
     constituency_id = request.constituency_id or settings.constituency_id
 
     try:
+        # Truncate stale rows so each run produces a clean slate
+        await bq.truncate_pipeline_data(constituency_id)
         hotspots = await bq.run_demand_clustering(constituency_id)
         if hotspots:
             await bq.insert_hotspots(hotspots)
@@ -215,6 +217,7 @@ async def pubsub_push_handler(
     # Fire-and-forget: run clustering + scoring in background
     async def _run_pipeline():
         try:
+            await bq.truncate_pipeline_data(constituency_id)
             hotspots = await bq.run_demand_clustering(constituency_id)
             if hotspots:
                 await bq.insert_hotspots(hotspots)

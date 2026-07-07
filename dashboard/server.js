@@ -204,7 +204,7 @@ apiRoute("get", "/api/projects", async req => {
   if (_projectsCache && (now - _projectsCacheTs) < PROJECTS_CACHE_TTL_MS) {
     return _projectsCache;
   }
-  const data = await proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: true });
+  const data = await proxyGet(req, "/dashboard/projects", { limit: 50, generate_evidence: true });
   _projectsCache = data;
   _projectsCacheTs = Date.now();
   return data;

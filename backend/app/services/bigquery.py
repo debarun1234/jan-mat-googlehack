@@ -248,9 +248,11 @@ class BigQueryService:
           AND category = @category
           AND raw_input_gcs_uri IS NOT NULL
           AND raw_input_gcs_uri != ''
-          AND input_type IN ('image', 'audio')
           AND processing_status = 'processed'
-        ORDER BY urgency_rating DESC, submitted_at DESC
+        ORDER BY
+            CASE input_type WHEN 'image' THEN 0 WHEN 'audio' THEN 1 ELSE 2 END ASC,
+            urgency_rating DESC,
+            submitted_at DESC
         LIMIT @limit
         """
         try:
@@ -307,32 +309,58 @@ class BigQueryService:
         Note: priority_scores table stores the rank column as `rank`, not `priority_rank`.
         We alias it to `priority_rank` here so callers can use a consistent field name.
         """
+        # Each pipeline run appends rows — tables accumulate duplicates over time.
+        # Fix: pick the single most-recent score per category and the single most-recent
+        # hotspot per category independently, then JOIN on category (not UUID) so
+        # hotspot_id mismatches across runs are irrelevant.
         sql = f"""
+        WITH latest_scores AS (
+            SELECT *
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY category
+                           ORDER BY generated_at DESC
+                       ) AS _rn
+                FROM `{self._table(self._analytics_ds, "priority_scores")}`
+                WHERE constituency_id = @constituency_id
+            )
+            WHERE _rn = 1
+        ),
+        latest_hotspots AS (
+            SELECT *
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY category
+                           ORDER BY computed_at DESC
+                       ) AS _rn
+                FROM `{self._table(self._analytics_ds, "demand_hotspots")}`
+                WHERE constituency_id = @constituency_id
+                  AND center_lat IS NOT NULL AND center_lon IS NOT NULL
+                  AND ABS(center_lat) BETWEEN 0.001 AND 90
+                  AND ABS(center_lon) BETWEEN 0.001 AND 180
+            )
+            WHERE _rn = 1
+        )
         SELECT
-            ps.hotspot_id,
-            ps.category,
-            ps.rank AS priority_rank,
-            ps.priority_score,
-            ps.demand_score,
-            ps.gap_index,
-            ps.suggested_project,
-            ps.generated_at,
-            dh.complaint_count,
-            dh.avg_urgency,
-            dh.affected_population,
-            dh.center_lat,
-            dh.center_lon,
-            dh.radius_km
-        FROM `{self._table(self._analytics_ds, "priority_scores")}` ps
-        JOIN `{self._table(self._analytics_ds, "demand_hotspots")}` dh
-          ON ps.hotspot_id = dh.hotspot_id
-        WHERE ps.constituency_id = @constituency_id
-          AND DATE(ps.generated_at) = (
-            SELECT MAX(DATE(generated_at))
-            FROM `{self._table(self._analytics_ds, "priority_scores")}`
-            WHERE constituency_id = @constituency_id
-          )
-        ORDER BY ps.rank ASC
+            ls.hotspot_id,
+            ls.category,
+            ls.rank         AS priority_rank,
+            ls.priority_score,
+            ls.demand_score,
+            ls.gap_index,
+            ls.suggested_project,
+            ls.generated_at,
+            lh.complaint_count,
+            lh.avg_urgency,
+            lh.affected_population,
+            lh.center_lat,
+            lh.center_lon,
+            lh.radius_km
+        FROM latest_scores ls
+        JOIN latest_hotspots lh ON ls.category = lh.category
+        ORDER BY ls.rank ASC
         LIMIT @limit
         """
         rows = await self._run_query(
@@ -364,6 +392,9 @@ class BigQueryService:
             avg_urgency
         FROM `{self._table(self._analytics_ds, "demand_hotspots")}`
         WHERE constituency_id = @constituency_id
+          AND center_lat IS NOT NULL AND center_lon IS NOT NULL
+          AND ABS(center_lat) BETWEEN 0.001 AND 90
+          AND ABS(center_lon) BETWEEN 0.001 AND 180
         ORDER BY complaint_count DESC
         LIMIT 500
         """
@@ -529,6 +560,39 @@ class BigQueryService:
         if errors:
             log.error("bq_priority_insert_error", errors=errors)
             raise RuntimeError(f"BigQuery priority insert failed: {errors}")
+
+    async def truncate_pipeline_data(self, constituency_id: str) -> None:
+        """
+        Delete all existing demand_hotspots and priority_scores rows for this
+        constituency before a fresh pipeline run.  This prevents row accumulation
+        that causes duplicate project cards.
+
+        Note: BigQuery DML cannot touch the streaming buffer (rows inserted in the
+        last few minutes).  Use a short sleep in the pipeline to let the buffer flush,
+        or accept that very-recent rows survive until the next run.
+        """
+        client = self._get_client()
+
+        def _delete(sql: str) -> None:
+            job = client.query(sql)
+            job.result()  # wait for DML to complete
+
+        hotspot_sql = f"""
+        DELETE FROM `{self._table(self._analytics_ds, "demand_hotspots")}`
+        WHERE constituency_id = '{constituency_id}'
+        """
+        score_sql = f"""
+        DELETE FROM `{self._table(self._analytics_ds, "priority_scores")}`
+        WHERE constituency_id = '{constituency_id}'
+        """
+        try:
+            await asyncio.get_event_loop().run_in_executor(None, lambda: _delete(hotspot_sql))
+            log.info("bq_hotspots_truncated", constituency_id=constituency_id)
+            await asyncio.get_event_loop().run_in_executor(None, lambda: _delete(score_sql))
+            log.info("bq_scores_truncated", constituency_id=constituency_id)
+        except Exception as e:
+            # DML may fail on streaming-buffer rows — log warning, don't abort pipeline
+            log.warning("bq_truncate_warning", constituency_id=constituency_id, error=str(e))
 
     async def insert_hotspots(self, rows: list[dict]) -> None:
         """Stream demand hotspot rows into BigQuery."""
