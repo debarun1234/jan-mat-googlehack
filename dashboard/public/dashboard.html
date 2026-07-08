@@ -474,7 +474,7 @@ tr:last-child td{border-bottom:none}
     <div class="kpi"><div class="kpi-icon">👥</div><div class="kpi-label">Registered Citizens</div><div class="kpi-value" id="kpi-users">—</div><div class="kpi-delta up" id="kpi-users-d"></div></div>
     <div class="kpi"><div class="kpi-icon">🏆</div><div class="kpi-label">Top Priority</div><div class="kpi-value" id="kpi-top-cat" style="font-size:1.2rem">—</div><div class="kpi-delta" id="kpi-top-score"></div></div>
     <div class="kpi"><div class="kpi-icon">⚡</div><div class="kpi-label">Avg Urgency</div><div class="kpi-value" id="kpi-urgency">—</div><div class="kpi-delta">/5 rating</div></div>
-    <div class="kpi"><div class="kpi-icon">🎙️</div><div class="kpi-label">Voice Submissions</div><div class="kpi-value" id="kpi-voice">142</div><div class="kpi-delta up">53% of total</div></div>
+    <div class="kpi"><div class="kpi-icon">🎙️</div><div class="kpi-label">Voice Submissions</div><div class="kpi-value" id="kpi-voice">—</div><div class="kpi-delta up" id="kpi-voice-delta">—</div></div>
   </div>
 
   <!-- Charts Row 1 -->
@@ -1030,13 +1030,23 @@ async function loadOverview() {
     const vals   = Object.values(catCounts);
     chartDoughnut('chartCategory', labels, vals, labels.map(l=>CAT_COLORS[l]||'#90a4ae'));
 
-    // Chart: Input types (doughnut)
+    // Chart: Input types (doughnut) + update KPI card
     const inputData = await (await fetch('/api/telemetry/input-types')).json();
+    const inputRows = inputData.data || [];
     chartDoughnut('chartInput',
-      inputData.data.map(d=>d.label),
-      inputData.data.map(d=>d.count),
+      inputRows.map(d=>d.label),
+      inputRows.map(d=>d.count),
       ['#1a237e','#2e7d32','#e65100']
     );
+    // Update voice KPI with real count + real percentage
+    const audioRow = inputRows.find(d=>d.type==='audio');
+    if (audioRow != null) {
+      const inputTotal = inputRows.reduce((s,d)=>s+d.count, 0) || 1;
+      const pct = Math.round(audioRow.count / inputTotal * 100);
+      document.getElementById('kpi-voice').textContent = audioRow.count.toLocaleString();
+      const delta = document.getElementById('kpi-voice-delta');
+      if (delta) delta.textContent = pct + '% of total';
+    }
 
     // Chart: Priority scores (horizontal bar)
     if (ranked.length) {

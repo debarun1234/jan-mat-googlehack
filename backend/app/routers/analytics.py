@@ -13,6 +13,7 @@ Endpoints:
   GET  /analytics/stats            — submission stats for a constituency
 """
 
+import asyncio
 import base64
 import json
 from datetime import datetime, timezone
@@ -240,6 +241,8 @@ async def get_stats(
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
 ):
     """Submission volume stats for admin/monitoring."""
+    from google.cloud import bigquery as gcbq
+
     try:
         heatmap = await bq.get_heatmap_data(constituency_id)
         category_counts: dict[str, int] = {}
@@ -249,11 +252,45 @@ async def get_stats(
                 row.get("weight", 0)
             )
 
+        # Input-type counts — query citizen_grievances directly (constituency-scoped)
+        input_counts = {"audio": 0, "text": 0, "image": 0}
+        try:
+            sql = f"""
+            SELECT
+                COUNTIF(input_type = 'audio') AS audio_count,
+                COUNTIF(input_type = 'text')  AS text_count,
+                COUNTIF(input_type = 'image') AS image_count
+            FROM `{bq._table(bq._analytics_ds, "citizen_grievances")}`
+            WHERE constituency_id = @constituency_id
+            """
+            rows = await asyncio.wait_for(
+                bq._run_query(
+                    sql,
+                    gcbq.QueryJobConfig(
+                        query_parameters=[
+                            gcbq.ScalarQueryParameter("constituency_id", "STRING", constituency_id),
+                        ]
+                    ),
+                ),
+                timeout=10.0,
+            )
+            if rows:
+                input_counts = {
+                    "audio": int(rows[0].get("audio_count") or 0),
+                    "text":  int(rows[0].get("text_count")  or 0),
+                    "image": int(rows[0].get("image_count") or 0),
+                }
+        except Exception:
+            pass  # fall back to zeros — non-fatal
+
         return {
-            "constituency_id": constituency_id,
-            "total_hotspots": len(heatmap),
-            "total_complaints": sum(category_counts.values()),
-            "by_category": category_counts,
+            "constituency_id":   constituency_id,
+            "total_hotspots":    len(heatmap),
+            "total_complaints":  sum(category_counts.values()),
+            "by_category":       category_counts,
+            "audio_submissions": input_counts["audio"],
+            "text_submissions":  input_counts["text"],
+            "image_submissions": input_counts["image"],
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
