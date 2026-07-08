@@ -279,6 +279,34 @@ tr:last-child td{border-bottom:none}
 }
 .mpd-signout:hover{background:#ffebee}
 
+/* ── CONSTITUENCY SWITCHER DROPDOWN ── */
+#cst-btn{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);
+  color:#fff;padding:5px 13px;border-radius:20px;cursor:pointer;
+  font-size:.78rem;font-weight:600;white-space:nowrap;
+  transition:background .15s;
+}
+#cst-btn:hover{background:rgba(255,255,255,.22)}
+#cst-dropdown{
+  display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);
+  background:#fff;border-radius:12px;min-width:250px;
+  box-shadow:0 8px 40px rgba(0,0,0,.25);z-index:300;
+  border:1px solid #e0e7ff;overflow:hidden;
+}
+#cst-dropdown.open{display:block}
+.cst-header{padding:9px 14px;font-size:.68rem;font-weight:700;color:#607d8b;
+  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e0e7ff}
+.cst-item{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  cursor:pointer;font-size:.83rem;color:#1a1a2e;transition:background .12s;
+}
+.cst-item:hover{background:#f0f4ff}
+.cst-item.cst-active{background:#e8eaf6;font-weight:700}
+.cst-dot{width:8px;height:8px;border-radius:50%;background:#bdbdbd;flex-shrink:0}
+.cst-item.cst-active .cst-dot{background:#3f51b5}
+.cst-meta{font-size:.7rem;color:#90a4ae;margin-top:1px}
+
 /* ── COMPLETION MODAL ── */
 #completion-modal{
   display:none;position:fixed;inset:0;
@@ -376,7 +404,9 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="topbar-center">
     <span class="health-dot" id="health-dot" title="System healthy"></span>
-    <span style="font-size:.8rem;color:rgba(255,255,255,.6)" id="constituency-label">Loading...</span>
+    <button id="cst-btn" onclick="toggleCstDropdown()" title="Switch constituency">
+      📍 <span id="constituency-label">Loading…</span> <span style="font-size:.6rem;opacity:.7">▾</span>
+    </button>
   </div>
   <div class="topbar-right">
     <button class="topbar-btn" onclick="runPipeline()">🔄 Refresh</button>
@@ -667,6 +697,15 @@ tr:last-child td{border-bottom:none}
     <div class="page-sub">Registered citizens who have submitted grievances</div>
   </div>
 
+  <!-- POC data note -->
+  <div style="display:flex;align-items:flex-start;gap:10px;background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:.82rem">
+    <span style="font-size:1.1rem;flex-shrink:0">🏙️</span>
+    <div>
+      <strong style="color:#e65100">POC Note — Urban Test Data Only.</strong>
+      <span style="color:#795548;margin-left:4px">All current registrants are from urban areas (Bengaluru). In production, rural citizens in the same constituency would appear here — the pipeline, scoring, and evidence log are fully designed to surface rural infrastructure gaps (water, roads, health) that urban-volume bias would otherwise suppress. The priority formula's population normalization (per 1,000 residents) is specifically built to prevent urban wards from drowning out rural ward demand.</span>
+    </div>
+  </div>
+
   <!-- User stats -->
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="kpi"><div class="kpi-label">Total Registered</div><div class="kpi-value" id="u-total">—</div></div>
@@ -755,7 +794,7 @@ tr:last-child td{border-bottom:none}
       <div class="db-metric"><div class="db-metric-value" id="db-disk">10 GB</div><div class="db-metric-label">Disk Allocated</div></div>
     </div></div>
     <div class="card"><div class="card-body">
-      <div class="db-metric"><div class="db-metric-value" id="db-cost">$0.24</div><div class="db-metric-label">Cost / Day (USD)</div></div>
+      <div class="db-metric"><div class="db-metric-value" id="db-cost">$0.24 / ₹22</div><div class="db-metric-label">Cost / Day (USD · INR)</div></div>
     </div></div>
   </div>
 
@@ -946,13 +985,13 @@ function notify(msg, type='') {
 async function init() {
   session = await (await fetch('/api/session')).json();
   document.getElementById('mp-name-label').textContent = session.name;
-  document.getElementById('constituency-label').textContent = `📍 ${session.constituency_id}`;
+  document.getElementById('constituency-label').textContent = session.constituency_id;
   if (session.avatar) {
     document.getElementById('mp-avatar').innerHTML = `<img src="${session.avatar}" alt="">`;
   } else {
     document.getElementById('mp-avatar').textContent = session.name?.charAt(0) || 'M';
   }
-  await Promise.all([loadOverview(), checkHealth()]);
+  await Promise.all([loadOverview(), checkHealth(), loadConstituencies()]);
 }
 
 // ── Overview ───────────────────────────────────────────────────────
@@ -1600,8 +1639,27 @@ async function loadUsers() {
     // Charts
     const cityData  = data.summary?.by_city  || {};
     const stateData = data.summary?.by_state || {};
-    chartDoughnut('chartCities', Object.keys(cityData),  Object.values(cityData), Object.keys(cityData).map((_,i)=>palette(i)));
-    chartDoughnut('chartStates', Object.keys(stateData), Object.values(stateData),Object.keys(stateData).map((_,i)=>palette(i)));
+
+    const noDataHtml = (label) => `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted)">
+        <span style="font-size:2rem">🗺️</span>
+        <span style="font-size:.82rem">No ${label} data yet</span>
+      </div>`;
+
+    const cityCanvas  = document.getElementById('chartCities');
+    const stateCanvas = document.getElementById('chartStates');
+
+    if (Object.keys(cityData).length === 0) {
+      cityCanvas.closest('.chart-container').innerHTML = noDataHtml('city');
+    } else {
+      chartDoughnut('chartCities', Object.keys(cityData), Object.values(cityData), Object.keys(cityData).map((_,i)=>palette(i)));
+    }
+
+    if (Object.keys(stateData).length === 0) {
+      stateCanvas.closest('.chart-container').innerHTML = noDataHtml('state');
+    } else {
+      chartDoughnut('chartStates', Object.keys(stateData), Object.values(stateData), Object.keys(stateData).map((_,i)=>palette(i)));
+    }
   } catch(e){ console.error('Users',e); }
 }
 
@@ -1658,14 +1716,21 @@ async function loadBudget() {
   }
 
   try {
+    const INR_RATE = 95.60; // 1 USD = ₹95.60
+    const inr = (usd) => '₹' + Math.round(usd * INR_RATE).toLocaleString('en-IN');
+
     const pct   = Math.min(+(d.pct_used) || 0, 100);
     const barColor = pct < 50 ? 'linear-gradient(90deg,#2e7d32,#4caf50)'
                    : pct < 80 ? 'linear-gradient(90deg,#e65100,#ff9800)'
                    :            'linear-gradient(90deg,#c62828,#ef5350)';
-    const spent   = (+d.total_spent || 0).toFixed(2);
-    const remain  = (+d.remaining   || 0).toFixed(2);
-    const runway  = (+d.runway_months || 0) >= 99 ? '99+ mo' : (+d.runway_months || 0).toFixed(1) + ' mo';
-    const monthly = (+d.monthly_rate || 0) < 0.01 ? '<$0.01' : '$' + (+d.monthly_rate).toFixed(2);
+    const spentUsd  = (+d.total_spent || 0);
+    const remainUsd = (+d.remaining   || 0);
+    const budgetUsd = +d.total_budget || 300;
+    const monthlyUsd = +d.monthly_rate || 0;
+    const runway  = monthlyUsd >= 99 ? '99+ mo' : (+d.runway_months || 0).toFixed(1) + ' mo';
+    const monthlyStr = monthlyUsd < 0.01
+      ? '<$0.01 / <₹1'
+      : `$${monthlyUsd.toFixed(2)} <span style="color:var(--muted);font-size:.7rem">/ ${inr(monthlyUsd)}</span>`;
     const b = d.breakdown       || {};
     const m = d.usage_metrics   || {};
 
@@ -1673,35 +1738,51 @@ async function loadBudget() {
     const gcsLabel = m.gcs_live ? '' : ' <span style="color:#e65100;font-size:.65rem" title="GCS list unavailable">est.</span>';
 
     body.innerHTML = `
+      <div style="font-size:.65rem;color:var(--muted);text-align:right;margin-bottom:8px">1 USD = ₹${INR_RATE.toFixed(2)}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
-        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$${(+d.total_budget||300).toFixed(0)}</div><div class="db-metric-label">Total Budget</div></div>
-        <div class="db-metric"><div class="db-metric-value">${monthly}</div><div class="db-metric-label">Est. Monthly</div></div>
-        <div class="db-metric"><div class="db-metric-value" style="color:${pct<80?'#2e7d32':'#c62828'}">$${remain}</div><div class="db-metric-label">Remaining</div></div>
+        <div class="db-metric">
+          <div class="db-metric-value" style="color:#2e7d32">$${budgetUsd.toFixed(0)}</div>
+          <div style="font-size:.65rem;color:#2e7d32;font-weight:600">${inr(budgetUsd)}</div>
+          <div class="db-metric-label">Total Budget</div>
+        </div>
+        <div class="db-metric">
+          <div class="db-metric-value">${monthlyStr}</div>
+          <div class="db-metric-label">Est. Monthly</div>
+        </div>
+        <div class="db-metric">
+          <div class="db-metric-value" style="color:${pct<80?'#2e7d32':'#c62828'}">$${remainUsd.toFixed(2)}</div>
+          <div style="font-size:.65rem;color:${pct<80?'#2e7d32':'#c62828'};font-weight:600">${inr(remainUsd)}</div>
+          <div class="db-metric-label">Remaining</div>
+        </div>
         <div class="db-metric"><div class="db-metric-value">${runway}</div><div class="db-metric-label">Runway</div></div>
       </div>
       <div class="progress-bar" style="height:12px;margin-bottom:6px">
         <div class="progress-fill" style="width:${pct}%;background:${barColor};transition:width .6s"></div>
       </div>
       <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px">
-        ${pct.toFixed(1)}% of $${+d.total_budget||300} used · $${spent} spend month-to-date
+        ${pct.toFixed(1)}% of $${budgetUsd} (${inr(budgetUsd)}) used · $${spentUsd.toFixed(2)} (${inr(spentUsd)}) spend month-to-date
       </div>
       <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cost Breakdown</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem">
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>☁️ Cloud SQL</span><strong>$${(+(b.cloud_sql)||0).toFixed(2)}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>☁️ Cloud SQL</span>
+          <span style="text-align:right"><strong>$${(+(b.cloud_sql)||0).toFixed(2)}</strong><br><span style="font-size:.65rem;color:var(--muted)">${inr(+(b.cloud_sql)||0)}</span></span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>📊 BigQuery${bqLabel}</span><strong>$${(+(b.bigquery)||0).toFixed(4)}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>📊 BigQuery${bqLabel}</span>
+          <span style="text-align:right"><strong>$${(+(b.bigquery)||0).toFixed(4)}</strong><br><span style="font-size:.65rem;color:var(--muted)">${inr(+(b.bigquery)||0)}</span></span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>🗄️ Cloud Storage${gcsLabel}</span><strong>$${(+(b.cloud_storage)||0).toFixed(4)}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>🗄️ Cloud Storage${gcsLabel}</span>
+          <span style="text-align:right"><strong>$${(+(b.cloud_storage)||0).toFixed(4)}</strong><br><span style="font-size:.65rem;color:var(--muted)">${inr(+(b.cloud_storage)||0)}</span></span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>🚀 Cloud Run</span><strong>$${(+(b.cloud_run)||0).toFixed(4)}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>🚀 Cloud Run</span>
+          <span style="text-align:right"><strong>$${(+(b.cloud_run)||0).toFixed(4)}</strong><br><span style="font-size:.65rem;color:var(--muted)">${inr(+(b.cloud_run)||0)}</span></span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px;grid-column:span 2">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface2);border-radius:6px;grid-column:span 2">
           <span>🤖 Gemini API</span>
-          <strong style="color:#2e7d32">$0 <span style="font-weight:400;font-size:.7rem">(${b.gemini_note||'free tier'})</span></strong>
+          <strong style="color:#2e7d32">$0 / ₹0 <span style="font-weight:400;font-size:.7rem">(${b.gemini_note||'free tier'})</span></strong>
         </div>
       </div>
       <div style="margin-top:12px;font-size:.72rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
@@ -1730,7 +1811,7 @@ async function loadDBStatus() {
     document.getElementById('db-tier-badge').textContent    = d.tier;
     document.getElementById('db-connections').textContent   = d.connections;
     document.getElementById('db-disk').textContent          = `${d.disk_gb} GB`;
-    document.getElementById('db-cost').textContent          = `$${d.cost_day_usd.toFixed(2)}`;
+    document.getElementById('db-cost').textContent          = `$${d.cost_day_usd.toFixed(2)} / ₹${Math.round(d.cost_day_usd * 95.60).toLocaleString('en-IN')}`;
     const badge = document.getElementById('db-status-badge');
     badge.className = `badge ${d.status==='RUNNABLE'?'badge-green':'badge-red'}`;
   } catch(e){ console.error('DB status',e); }
@@ -1773,6 +1854,14 @@ async function runStep(step) {
 }
 
 function exportCSV() { window.location.href='/api/export/csv'; }
+
+// ── Colour palette for dynamic charts (city / state / etc.) ────────
+const _PALETTE = [
+  '#1a237e','#1565c0','#00695c','#e65100','#6a1b9a',
+  '#c62828','#f57f17','#2e7d32','#4527a0','#00838f',
+  '#ad1457','#558b2f','#283593','#ef6c00','#37474f',
+];
+function palette(i) { return _PALETTE[i % _PALETTE.length]; }
 
 // ── Chart helpers ──────────────────────────────────────────────────
 function renderChart(id, type, data, options={}) {
@@ -1842,6 +1931,9 @@ document.addEventListener('DOMContentLoaded', init);
     <a class="mpd-signout" href="/auth/logout"><span class="mpd-icon">🚪</span>Sign Out</a>
   </div>
 </div>
+
+<!-- Constituency Switcher Dropdown (populated by JS) -->
+<div id="cst-dropdown"></div>
 
 <!-- ── Completion Modal ── -->
 <div id="completion-modal" role="dialog" aria-modal="true">
@@ -1923,6 +2015,60 @@ let completionProject = null;
 let completionLat = null, completionLon = null;
 let completionImageB64 = null, completionMime = null;
 let completionImageRequired = true; // false when project has no citizen image evidence
+
+// ── Constituency Switcher ─────────────────────────────────────────────
+async function loadConstituencies() {
+  try {
+    const r = await fetch('/api/constituencies');
+    const d = await r.json();
+    const active = (d.constituencies || []).find(c => c.active);
+    if (active) document.getElementById('constituency-label').textContent = active.name;
+    renderCstDropdown(d.constituencies || []);
+  } catch(e) { /* ignore */ }
+}
+
+function renderCstDropdown(list) {
+  document.getElementById('cst-dropdown').innerHTML =
+    '<div class="cst-header">Switch Constituency</div>' +
+    list.map(c => `
+      <div class="cst-item ${c.active ? 'cst-active' : ''}" onclick="switchConstituency('${c.id}')">
+        <div class="cst-dot"></div>
+        <div style="flex:1">
+          <div>${c.name}</div>
+          <div class="cst-meta">${c.state} · ${c.id}</div>
+        </div>
+        ${c.active ? '<span style="font-size:.7rem;color:#3f51b5;font-weight:800">✓</span>' : ''}
+      </div>`).join('');
+}
+
+function toggleCstDropdown() {
+  document.getElementById('cst-dropdown').classList.toggle('open');
+}
+
+async function switchConstituency(id) {
+  document.getElementById('cst-dropdown').classList.remove('open');
+  notify('Switching constituency…', '');
+  try {
+    const r = await fetch('/api/switch-constituency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ constituency_id: id }),
+    });
+    if (!r.ok) throw new Error('Switch failed');
+    const d = await r.json();
+    notify(`Switched to ${d.name} — reloading…`, 'success');
+    setTimeout(() => window.location.reload(), 800);
+  } catch(e) {
+    notify('Failed to switch constituency', 'error');
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('cst-dropdown');
+  if (!document.getElementById('cst-btn')?.contains(e.target) && !dd?.contains(e.target)) {
+    dd?.classList.remove('open');
+  }
+});
 
 // ── MP Profile Dropdown ────────────────────────────────────────────────
 function toggleMpDropdown() {

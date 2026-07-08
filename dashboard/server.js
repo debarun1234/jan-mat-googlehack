@@ -108,7 +108,38 @@ function requireAuth(req, res, next) {
   return next();
 }
 
-function getMPUser(req) { return req.user || null; }
+// ── Constituency helpers ──────────────────────────────────────────────
+const CONSTITUENCY_COOKIE = "janmat_constituency";
+const KNOWN_CONSTITUENCIES = [
+  { id: "KA-BLR-NORTH-01", name: "Bangalore North", state: "Karnataka"   },
+  { id: "MH-PUN-WEST-01",  name: "Pune West",       state: "Maharashtra" },
+];
+
+function getConstituencyOverride(req) {
+  const match = (req.headers.cookie || "").match(
+    new RegExp(`(?:^|;\\s*)${CONSTITUENCY_COOKIE}=([^;]+)`)
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setConstituencyCookie(res, id) {
+  res.setHeader("Set-Cookie",
+    `${CONSTITUENCY_COOKIE}=${encodeURIComponent(id)}; HttpOnly; SameSite=Lax; Max-Age=${AUTH_MAX_AGE}; Path=/${SECURE_FLAG}`
+  );
+}
+
+/** Active constituency = override cookie → JWT value → hardcoded fallback */
+function getActiveConstituency(req) {
+  return getConstituencyOverride(req)
+    || req.user?.constituency_id
+    || "KA-BLR-NORTH-01";
+}
+
+function getMPUser(req) {
+  if (!req.user) return null;
+  const override = getConstituencyOverride(req);
+  return override ? { ...req.user, constituency_id: override } : req.user;
+}
 
 // ── Auth Routes ───────────────────────────────────────────────────────
 app.get("/", requireAuth, (req, res) => res.redirect("/dashboard"));
@@ -195,33 +226,32 @@ function apiRoute(method, routePath, handler) {
 
 // ── Dashboard data routes ─────────────────────────────────────────────
 // Cache projects+evidence so Gemini is called once, not on every page load/refresh.
-let _projectsCache = null;
-let _projectsCacheTs = 0;
+// Keyed by constituency_id so switching MPs / constituencies gets fresh data.
+const _projectsCache = {}; // { [constituency_id]: { data, ts } }
 const PROJECTS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 apiRoute("get", "/api/projects", async req => {
+  const cid = getActiveConstituency(req);
   const now = Date.now();
-  if (_projectsCache && (now - _projectsCacheTs) < PROJECTS_CACHE_TTL_MS) {
-    return _projectsCache;
-  }
-  const data = await proxyGet(req, "/dashboard/projects", { limit: 50, generate_evidence: true });
-  _projectsCache = data;
-  _projectsCacheTs = Date.now();
+  const cached = _projectsCache[cid];
+  if (cached && (now - cached.ts) < PROJECTS_CACHE_TTL_MS) return cached.data;
+  const data = await proxyGet(req, "/dashboard/projects", { limit: 50, generate_evidence: true, constituency_id: cid });
+  _projectsCache[cid] = { data, ts: Date.now() };
   return data;
 });
-apiRoute("get", "/api/heatmap",          req => proxyGet(req, "/dashboard/heatmap"));
-apiRoute("get", "/api/map-submissions",  req => proxyGet(req, "/dashboard/map-submissions", { limit: req.query.limit || 1000 }));
-apiRoute("get", "/api/ai-insights",      req => proxyGet(req, "/dashboard/ai-insights",      { days: req.query.days || 90 }));
-apiRoute("get", "/api/trends",    req => proxyGet(req, "/dashboard/trends", { days: req.query.days || 30 }));
+apiRoute("get", "/api/heatmap",          req => proxyGet(req, "/dashboard/heatmap",          { constituency_id: getActiveConstituency(req) }));
+apiRoute("get", "/api/map-submissions",  req => proxyGet(req, "/dashboard/map-submissions",  { limit: req.query.limit || 1000, constituency_id: getActiveConstituency(req) }));
+apiRoute("get", "/api/ai-insights",      req => proxyGet(req, "/dashboard/ai-insights",      { days: req.query.days || 90,    constituency_id: getActiveConstituency(req) }));
+apiRoute("get", "/api/trends",           req => proxyGet(req, "/dashboard/trends",           { days: req.query.days || 30,    constituency_id: getActiveConstituency(req) }));
 apiRoute("get", "/api/stats/:id", req => proxyGet(req, `/analytics/stats/${req.params.id}`));
 
 // ── Telemetry ─────────────────────────────────────────────────────────
 apiRoute("get", "/api/telemetry/overview", async (req) => {
-  const constituency_id = getMPUser(req)?.constituency_id || "KA-BLR-NORTH-01";
+  const constituency_id = getActiveConstituency(req);
   const [stats, projects, trends] = await Promise.allSettled([
     proxyGet(req, `/analytics/stats/${constituency_id}`),
-    proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: false }),
-    proxyGet(req, "/dashboard/trends", { days: 30 }),
+    proxyGet(req, "/dashboard/projects", { limit: 10, generate_evidence: false, constituency_id }),
+    proxyGet(req, "/dashboard/trends", { days: 30, constituency_id }),
   ]);
   return {
     stats:    stats.status    === "fulfilled" ? stats.value    : null,
@@ -230,13 +260,17 @@ apiRoute("get", "/api/telemetry/overview", async (req) => {
   };
 });
 
-apiRoute("get", "/api/telemetry/input-types", async () => ({
-  data: [
-    { type: "audio", count: 142, label: "🎙️ Voice" },
-    { type: "text",  count: 89,  label: "✍️ Text"  },
-    { type: "image", count: 31,  label: "📷 Photo" },
-  ],
-}));
+apiRoute("get", "/api/telemetry/input-types", async (req) => {
+  const cid = getActiveConstituency(req);
+  const stats = await proxyGet(req, `/analytics/stats/${cid}`);
+  return {
+    data: [
+      { type: "audio", count: stats.audio_submissions ?? 0, label: "🎙️ Voice" },
+      { type: "text",  count: stats.text_submissions  ?? 0, label: "✍️ Text"  },
+      { type: "image", count: stats.image_submissions ?? 0, label: "📷 Photo" },
+    ],
+  };
+});
 
 apiRoute("get", "/api/telemetry/health", async (req) => {
   const [backendHealth, etlHealth] = await Promise.allSettled([
@@ -304,7 +338,7 @@ app.post("/api/db/start", requireAuth, (req, res) =>
 
 // ── Pipeline control ──────────────────────────────────────────────────
 app.post("/api/pipeline/run", requireAuth, async (req, res) => {
-  const constituency_id = getMPUser(req)?.constituency_id || "KA-BLR-NORTH-01";
+  const constituency_id = getActiveConstituency(req);
   const steps = [];
   try {
     const clusterResult = await proxyPost(req, "/analytics/cluster", { constituency_id });
@@ -320,14 +354,30 @@ app.post("/api/pipeline/run", requireAuth, async (req, res) => {
       steps.push({ step: "evidence", status: "skipped", reason: evErr.message });
     }
 
-    // Bust the projects cache so the next GET picks up fresh rankings + evidence
-    _projectsCache = null;
-    _projectsCacheTs = 0;
+    // Bust this constituency's projects cache so the next GET picks up fresh rankings
+    delete _projectsCache[constituency_id];
 
     res.json({ status: "success", constituency_id, steps, ran_at: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ error: e.message, steps });
   }
+});
+
+// ── Constituency switcher ─────────────────────────────────────────────
+app.get("/api/constituencies", requireAuth, (req, res) => {
+  const active = getActiveConstituency(req);
+  res.json({
+    active,
+    constituencies: KNOWN_CONSTITUENCIES.map(c => ({ ...c, active: c.id === active })),
+  });
+});
+
+app.post("/api/switch-constituency", requireAuth, (req, res) => {
+  const { constituency_id } = req.body;
+  const valid = KNOWN_CONSTITUENCIES.find(c => c.id === constituency_id);
+  if (!valid) return res.status(400).json({ error: `Unknown constituency: ${constituency_id}` });
+  setConstituencyCookie(res, constituency_id);
+  res.json({ switched_to: constituency_id, name: valid.name, state: valid.state });
 });
 
 // ── Media proxy ───────────────────────────────────────────────────────

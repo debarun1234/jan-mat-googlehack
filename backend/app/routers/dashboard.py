@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -193,13 +193,14 @@ async def get_projects(
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     limit: int = 10,
     generate_evidence: bool = True,
+    constituency_id_param: str | None = Query(None, alias="constituency_id"),
 ):
     """
     Return ranked development projects with Gemini Evidence Logs.
 
     This is the core Phase 3 output — what the MP sees.
     """
-    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    constituency_id = constituency_id_param or mp.get("constituency_id", settings.constituency_id)
 
     try:
         ranked = await bq.get_priority_ranking(constituency_id, limit=limit)
@@ -300,11 +301,12 @@ async def get_heatmap(
     mp: Annotated[dict, Depends(_get_current_mp)],
     settings: Annotated[Settings, Depends(get_settings)],
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    constituency_id_param: str | None = Query(None, alias="constituency_id"),
 ):
     """
     Return GeoJSON-ready lat/lon/weight data for Google Maps HeatmapLayer.
     """
-    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    constituency_id = constituency_id_param or mp.get("constituency_id", settings.constituency_id)
     try:
         data = await bq.get_heatmap_data(constituency_id)
         return {
@@ -323,13 +325,14 @@ async def get_ai_insights(
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     days: int = 90,
+    constituency_id_param: str | None = Query(None, alias="constituency_id"),
 ):
     """
     Gemini-powered analysis of geographic complaint clusters.
     Ranks areas by complaint volume, image evidence, and urgency.
     Returns top 5 critical areas with AI reasoning and recommended actions.
     """
-    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    constituency_id = constituency_id_param or mp.get("constituency_id", settings.constituency_id)
     try:
         clusters = await bq.get_area_complaint_clusters(constituency_id, days=days)
         if not clusters:
@@ -356,12 +359,13 @@ async def get_map_submissions(
     settings: Annotated[Settings, Depends(get_settings)],
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
     limit: int = 1000,
+    constituency_id_param: str | None = Query(None, alias="constituency_id"),
 ):
     """
     Individual submission geo-points for the marker/cluster view.
     Includes submission_id + media_url so the MP dashboard can show image/audio.
     """
-    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    constituency_id = constituency_id_param or mp.get("constituency_id", settings.constituency_id)
     backend_base = f"https://janmat-backend-w2w3osjaua-el.a.run.app"
     try:
         points = await bq.get_submission_points(
@@ -447,9 +451,10 @@ async def get_trends(
     settings: Annotated[Settings, Depends(get_settings)],
     bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
     days: int = 30,
+    constituency_id_param: str | None = Query(None, alias="constituency_id"),
 ):
     """Category complaint trends over the past N days."""
-    constituency_id = mp.get("constituency_id", settings.constituency_id)
+    constituency_id = constituency_id_param or mp.get("constituency_id", settings.constituency_id)
 
     from google.cloud import bigquery as gcbq
 

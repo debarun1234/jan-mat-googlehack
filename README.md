@@ -506,9 +506,51 @@ Built to run within **$300 GCP free credits** for the POC:
 | Metric | Weight | How JanMat Addresses It |
 |---|---|---|
 | **Technical Execution** | 25% | Gemini is a deterministic Pydantic-validated parser. Parallel async pipeline (asyncio.gather). CTE deduplication prevents dashboard corruption from multiple pipeline runs. Single combined Gemini call per project. End-to-end pipeline runs without human intervention. |
-| **Deployability & Scalability** | 25% | 100% serverless — Cloud Run scales to zero, BigQuery has no infra to manage, Pub/Sub handles burst traffic. MAPS_API_KEY injected as env var, not hardcoded. |
+| **Deployability & Scalability** | 25% | 100% serverless — Cloud Run scales to zero, BigQuery has no infra to manage, Pub/Sub handles burst traffic. MAPS_API_KEY injected as env var, not hardcoded. **Multi-constituency:** every backend endpoint accepts an optional `constituency_id` query param; `dashboard/server.js` stores the active constituency in a cookie so a single deployment serves any number of MPs. A second full constituency (Pune West `MH-PUN-WEST-01`) is seeded via `infra/scripts/seed_bigquery.py --constituency MH-PUN-WEST-01` + `seed_grievances.py`, demonstrating "new MP onboarded in minutes." **AlloyDB upgrade path:** the POC uses Cloud SQL f1-micro (lowest cost). Switching to AlloyDB requires only one env-var change (`DATABASE_URL`); the SQLAlchemy ORM layer is identical. AlloyDB delivers 4× read throughput and built-in read replicas for production-scale deployments across hundreds of constituencies. |
 | **Inclusivity & Accessibility** | 15% | Native Speech-to-Text + Translation pipeline. Citizens with no English literacy submit via voice in their language. Flutter app works on low-end Android devices. Firebase Phone OTP — no email required. **Offline queue** — submissions stored locally on device when there is no signal and synced automatically when connectivity returns, addressing low-connectivity rural deployment. |
 | **Problem-Solution Fit** | 20% | Priority Score cross-references citizen demand with real Census and NFHS datasets. Rural infrastructure gaps are quantified, not assumed. Evidence Log eliminates subjective bias. Population normalization prevents urban volume bias. |
+
+---
+
+## Scaling to Production
+
+### Multi-MP / Multi-Constituency Onboarding
+
+Every backend endpoint accepts an optional `?constituency_id=` query param that overrides the JWT-encoded value. The MP dashboard stores the active constituency in an HttpOnly cookie — **no re-login required to switch**. Adding a new MP takes three steps:
+
+```bash
+# 1. Seed infrastructure data for the new constituency
+python infra/scripts/seed_bigquery.py --project YOUR_PROJECT_ID --constituency MH-PUN-WEST-01
+
+# 2. Seed synthetic (or real) grievances
+python infra/scripts/seed_grievances.py --project YOUR_PROJECT_ID --constituency MH-PUN-WEST-01
+
+# 3. Run the pipeline for the new constituency
+curl -X POST .../analytics/cluster -d '{"constituency_id": "MH-PUN-WEST-01"}'
+curl -X POST .../analytics/score   -d '{"constituency_id": "MH-PUN-WEST-01"}'
+```
+
+The dashboard **constituency switcher** (📍 button in the topbar) lets an admin switch between any seeded constituency in real time without redeploying.
+
+### Database: Cloud SQL → AlloyDB Upgrade Path
+
+The POC uses **Cloud SQL f1-micro** (PostgreSQL-compatible, ~₹23/day) to stay within GCP free credits. The entire data layer talks through SQLAlchemy, so production migration to **AlloyDB** is a single environment variable change:
+
+```bash
+# Before (POC)
+DATABASE_URL=postgresql+asyncpg://user:pass@/janmat?host=/cloudsql/...
+
+# After (AlloyDB — same driver, same ORM, same schema)
+DATABASE_URL=postgresql+asyncpg://user:pass@ALLOYDB_IP:5432/janmat
+```
+
+AlloyDB advantages for production:
+- **4× faster reads** than Cloud SQL (columnar engine for analytics)
+- **Built-in read replicas** — each constituency's MP hits a replica, writes go to primary
+- **pgvector support** — enables semantic search over citizen complaint embeddings
+- **Zero-downtime maintenance** — critical for a 24/7 grievance intake system
+
+No code changes required. The upgrade is purely operational.
 
 ---
 

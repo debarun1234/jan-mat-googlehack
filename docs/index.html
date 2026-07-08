@@ -398,6 +398,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
           <tr><td>Accountability</td><td>Black box recommendation</td><td>Evidence Log cites exact data rows for every recommendation</td></tr>
           <tr><td>Input Types</td><td>Text form only</td><td>Voice note + Photo + Text in any Indian language</td></tr>
           <tr><td>Connectivity</td><td>Requires internet to submit</td><td>Offline queue — saves locally, auto-syncs when signal returns</td></tr>
+          <tr><td>Scale</td><td>One fixed deployment per portal</td><td>Multi-constituency cookie switcher; AlloyDB upgrade path with 4× throughput + read replicas</td></tr>
         </tbody>
       </table>
     </div>
@@ -451,6 +452,18 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
         <h3>Google OAuth2 Auth</h3>
         <p>MP and their office log in with Google. Session-based auth. All credentials in Secret Manager — zero hardcoded secrets. Constituency-scoped data isolation.</p>
         <span class="feat-highlight">JWT + Google OAuth2</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">🗂️</div>
+        <h3>Multi-Constituency Switcher</h3>
+        <p>A 📍 button in the dashboard topbar lets any administrator switch between constituencies live — no re-login, no redeploy. The cookie-stored override passes <code>constituency_id</code> to every backend endpoint. New constituencies onboard in minutes: seed infra + grievances, run the pipeline.</p>
+        <span class="feat-highlight">Bangalore North + Pune West seeded</span>
+      </div>
+      <div class="feat-card mp">
+        <div class="feat-card-icon">⚡</div>
+        <h3>AlloyDB Production Upgrade Path</h3>
+        <p>POC runs on Cloud SQL f1-micro to stay within free credits. Production migration to AlloyDB requires one env-var change — the SQLAlchemy ORM layer is identical. AlloyDB delivers 4× read throughput, built-in read replicas, and pgvector support for semantic complaint search across hundreds of constituencies.</p>
+        <span class="feat-highlight">Zero code change to upgrade</span>
       </div>
     </div>
 
@@ -743,7 +756,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
   <p>People's Priority Engine ·Build with AI: Code for Communities · Track 1 · Team QuantumDuo</p>
   <div class="footer-links">
     <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank">MP Dashboard</a>
-    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/download/v1.0.3/janmat-citizen-v1.0.3.apk">Download APK</a>
+    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/download/v1.0.4/janmat-citizen-v1.0.4.apk">Download APK</a>
     <a href="https://github.com/debarun1234/jan-mat-googlehack" target="_blank">GitHub</a>
     <a href="https://github.com/debarun1234" target="_blank">@debarun1234</a>
     <a href="https://github.com/vaderrex" target="_blank">@vaderrex</a>

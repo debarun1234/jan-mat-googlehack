@@ -2,10 +2,14 @@
 seed_bigquery.py — Load mock public infrastructure data into BigQuery
 
 Usage:
-    python infra/scripts/seed_bigquery.py --project YOUR_PROJECT_ID
+    python infra/scripts/seed_bigquery.py --project YOUR_PROJECT_ID [--constituency all|KA-BLR-NORTH-01|MH-PUN-WEST-01]
 
 This seeds janmat_infrastructure.public_infrastructure with mock
-Census 2011 + NFHS-5 style data for Bangalore North constituency.
+Census 2011 + NFHS-5 style data.
+
+Constituencies:
+  KA-BLR-NORTH-01 — Bangalore North, Karnataka
+  MH-PUN-WEST-01  — Pune West, Maharashtra  (added to demo multi-MP onboarding)
 """
 
 import argparse
@@ -14,6 +18,22 @@ from google.cloud import bigquery
 PROJECT_ID = None  # Set via --project arg
 DATASET_ID = "janmat_infrastructure"
 TABLE_ID = "public_infrastructure"
+
+_NONE_FIELDS = {
+    "primary_schools": None,
+    "secondary_schools": None,
+    "school_enrollment_rate": None,
+    "nearest_secondary_school_km": None,
+    "teen_travel_distance_km": None,
+    "health_centers": None,
+    "hospital_beds_per_1000": None,
+    "nearest_hospital_km": None,
+    "road_quality_score": None,
+    "paved_road_coverage_pct": None,
+    "piped_water_access_pct": None,
+    "sanitation_coverage_pct": None,
+    "open_defecation_free": None,
+}
 
 # ─────────────────────────────────────────
 # Mock data: Bangalore North constituency
@@ -314,20 +334,135 @@ MOCK_ROWS = [
 ]
 
 
-def seed(project_id: str) -> None:
+# ─────────────────────────────────────────
+# Pune West constituency (MH-PUN-WEST-01)
+# Synthetic data modelled on Census 2011 + NFHS-5 Maharashtra averages
+# Demonstrates "new MP onboarded in minutes" multi-constituency capability
+# ─────────────────────────────────────────
+PUNE_WEST_ROWS = [
+    # ── Education ───────────────────────────────────────────────────────────
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P001", "village_name": "Warje Malwadi",
+     "latitude": 18.4810, "longitude": 73.8098,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-01",
+     "population": 18600, "category": "Education",
+     "primary_schools": 3, "secondary_schools": 1,
+     "school_enrollment_rate": 0.67, "nearest_secondary_school_km": 4.8,
+     "teen_travel_distance_km": 6.1,
+     "data_source": "Census2011", "reference_year": 2011, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P002", "village_name": "Bavdhan Khurd",
+     "latitude": 18.5135, "longitude": 73.7705,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-02",
+     "population": 11200, "category": "Education",
+     "primary_schools": 2, "secondary_schools": 0,
+     "school_enrollment_rate": 0.59, "nearest_secondary_school_km": 7.3,
+     "teen_travel_distance_km": 9.0,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P003", "village_name": "Kothrud Extension",
+     "latitude": 18.5065, "longitude": 73.8070,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-03",
+     "population": 24300, "category": "Education",
+     "primary_schools": 5, "secondary_schools": 2,
+     "school_enrollment_rate": 0.78, "nearest_secondary_school_km": 1.9,
+     "teen_travel_distance_km": 2.4,
+     "data_source": "Census2011", "reference_year": 2011, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P004", "village_name": "Pirangut Village",
+     "latitude": 18.5020, "longitude": 73.7240,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-04",
+     "population": 7400, "category": "Education",
+     "primary_schools": 1, "secondary_schools": 0,
+     "school_enrollment_rate": 0.45, "nearest_secondary_school_km": 11.6,
+     "teen_travel_distance_km": 13.8,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    # ── Health ──────────────────────────────────────────────────────────────
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P001", "village_name": "Warje Malwadi",
+     "latitude": 18.4810, "longitude": 73.8098,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-01",
+     "population": 18600, "category": "Health",
+     "health_centers": 1, "hospital_beds_per_1000": 0.9, "nearest_hospital_km": 4.2,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P004", "village_name": "Pirangut Village",
+     "latitude": 18.5020, "longitude": 73.7240,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-04",
+     "population": 7400, "category": "Health",
+     "health_centers": 0, "hospital_beds_per_1000": 0.3, "nearest_hospital_km": 14.7,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    # ── Roads ───────────────────────────────────────────────────────────────
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P002", "village_name": "Bavdhan Khurd",
+     "latitude": 18.5135, "longitude": 73.7705,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-02",
+     "population": 11200, "category": "Roads",
+     "road_quality_score": 2.4, "paved_road_coverage_pct": 0.28,
+     "data_source": "OpenStreetMap", "reference_year": 2023, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P004", "village_name": "Pirangut Village",
+     "latitude": 18.5020, "longitude": 73.7240,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-04",
+     "population": 7400, "category": "Roads",
+     "road_quality_score": 1.5, "paved_road_coverage_pct": 0.12,
+     "data_source": "OpenStreetMap", "reference_year": 2023, "last_updated": "2024-01-01"},
+    # ── Water ───────────────────────────────────────────────────────────────
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P001", "village_name": "Warje Malwadi",
+     "latitude": 18.4810, "longitude": 73.8098,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-01",
+     "population": 18600, "category": "Water",
+     "piped_water_access_pct": 0.58, "sanitation_coverage_pct": 0.69, "open_defecation_free": False,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P004", "village_name": "Pirangut Village",
+     "latitude": 18.5020, "longitude": 73.7240,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-04",
+     "population": 7400, "category": "Water",
+     "piped_water_access_pct": 0.24, "sanitation_coverage_pct": 0.35, "open_defecation_free": False,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+    # ── Sanitation ──────────────────────────────────────────────────────────
+    {**_NONE_FIELDS,
+     "village_id": "VIL-P002", "village_name": "Bavdhan Khurd",
+     "latitude": 18.5135, "longitude": 73.7705,
+     "constituency_id": "MH-PUN-WEST-01", "ward_id": "PWARD-02",
+     "population": 11200, "category": "Sanitation",
+     "sanitation_coverage_pct": 0.41, "open_defecation_free": False,
+     "data_source": "NFHS5", "reference_year": 2021, "last_updated": "2024-01-01"},
+]
+
+ALL_ROWS = MOCK_ROWS + PUNE_WEST_ROWS
+
+
+def seed(project_id: str, constituency: str = "all") -> None:
     client = bigquery.Client(project=project_id)
     table_ref = f"{project_id}.{DATASET_ID}.{TABLE_ID}"
 
-    errors = client.insert_rows_json(table_ref, MOCK_ROWS)
+    if constituency == "all":
+        rows = ALL_ROWS
+    elif constituency == "MH-PUN-WEST-01":
+        rows = PUNE_WEST_ROWS
+    elif constituency == "KA-BLR-NORTH-01":
+        rows = MOCK_ROWS
+    else:
+        raise ValueError(f"Unknown constituency: {constituency}")
+
+    errors = client.insert_rows_json(table_ref, rows)
     if errors:
         print(f"❌ BigQuery insert errors: {errors}")
         raise RuntimeError("Seed failed")
 
-    print(f"✅ Seeded {len(MOCK_ROWS)} rows into {table_ref}")
+    print(f"✅ Seeded {len(rows)} rows into {table_ref} (constituency={constituency})")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True, help="GCP Project ID")
+    parser.add_argument(
+        "--constituency", default="all",
+        choices=["all", "KA-BLR-NORTH-01", "MH-PUN-WEST-01"],
+        help="Which constituency to seed (default: all)",
+    )
     args = parser.parse_args()
-    seed(args.project)
+    seed(args.project, args.constituency)
