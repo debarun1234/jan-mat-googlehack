@@ -266,6 +266,14 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
 #lb-close:hover{background:rgba(255,255,255,.25)}
 #lb-caption{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:.85rem;background:rgba(13,27,110,.7);padding:8px 20px;border-radius:20px;white-space:nowrap}
 
+/* ── AVAILABILITY NOTICE ── */
+.avail-notice{display:flex;align-items:flex-start;gap:16px;background:linear-gradient(135deg,#fff8e1,#fff3cd);border:2px solid #f9a825;border-radius:16px;padding:20px 24px;margin-bottom:40px}
+.avail-notice-icon{font-size:1.8rem;flex-shrink:0;line-height:1}
+.avail-notice-body h4{font-family:'Space Grotesk',sans-serif;font-size:1rem;font-weight:800;color:#e65100;margin:0 0 6px}
+.avail-notice-body p{font-size:.88rem;color:#5d4037;line-height:1.6;margin:0}
+.avail-notice-body strong{color:#bf360c}
+.avail-window{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #f9a825;border-radius:8px;padding:6px 14px;font-size:.82rem;font-weight:700;color:#e65100;margin-top:10px}
+
 /* ── DEMO VIDEO ── */
 #demo{padding:100px 0;background:linear-gradient(180deg,#f5f6ff 0%,#fff 100%)}
 .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:56px;align-items:start}
@@ -656,6 +664,12 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
         <span class="feat-highlight">Bangalore North + Pune West seeded</span>
       </div>
       <div class="feat-card mp">
+        <div class="feat-card-icon">💰</div>
+        <h3>Automated Cost Guard</h3>
+        <p>GitHub Actions shuts down Cloud SQL and scales Cloud Run to zero at <strong>11:00 PM IST</strong>, and restarts everything at <strong>6:00 AM IST</strong> — automatically, every day. Zero manual intervention, zero idle spend during off-hours. Keeps the full system within hackathon credit limits while staying live 17 hours a day.</p>
+        <span class="feat-highlight">cron: 30 17 * * * / 30 0 * * *</span>
+      </div>
+      <div class="feat-card mp">
         <div class="feat-card-icon">⚡</div>
         <h3>AlloyDB Production Upgrade Path</h3>
         <p>POC runs on Cloud SQL f1-micro to stay within free credits. Production migration to AlloyDB requires one env-var change — the SQLAlchemy ORM layer is identical. AlloyDB delivers 4× read throughput, built-in read replicas, and pgvector support for semantic complaint search across hundreds of constituencies.</p>
@@ -819,6 +833,25 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
     <div class="section-label fade-up">Evaluator Guide</div>
     <h2 class="section-title fade-up">Test the full pipeline<br>in under 5 minutes.</h2>
     <p class="section-sub fade-up">Two parallel journeys — try the citizen app to submit complaints, then watch them appear in the MP dashboard after the pipeline runs.</p>
+
+    <!-- Availability notice -->
+    <div class="avail-notice fade-up">
+      <div class="avail-notice-icon">🕐</div>
+      <div class="avail-notice-body">
+        <h4>⚠️ Evaluator Note — System Availability Window</h4>
+        <p>
+          To stay within Google Cloud hackathon credits, the backend (Cloud SQL + Cloud Run) runs on an
+          <strong>automated cost-guard schedule</strong>. GitHub Actions shuts down all services at
+          <strong>11:00 PM IST</strong> and restarts them automatically at <strong>6:00 AM IST</strong> every day.
+          <br>The citizen app and Firestore remain fully functional 24/7 — only the MP dashboard and
+          backend pipeline are offline during the window.
+        </p>
+        <div class="avail-window">
+          ✅ Available &nbsp;<strong>6:00 AM – 11:00 PM IST</strong>&nbsp; · &nbsp;
+          🔴 Offline &nbsp;<strong>11:00 PM – 6:00 AM IST</strong>
+        </div>
+      </div>
+    </div>
 
     <div class="howto-grid">
       <!-- CITIZEN SIDE -->

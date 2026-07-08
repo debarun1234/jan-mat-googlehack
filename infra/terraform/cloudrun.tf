@@ -152,11 +152,16 @@ resource "google_cloud_run_v2_service" "backend" {
   ]
 
   lifecycle {
-    # CI/CD deploy workflow manages image, env vars, and scaling — Terraform must not touch them
+    # CI/CD deploy workflow manages image, env vars, and scaling — Terraform must not touch them.
+    # client/client_version/template labels are set by gcloud CLI and GitHub Actions; ignore to
+    # prevent noisy diffs on every plan.
     ignore_changes = [
       template[0].containers[0].image,
       template[0].containers[0].env,
       template[0].scaling,
+      client,
+      client_version,
+      template[0].labels,
     ]
   }
 }
@@ -264,6 +269,9 @@ resource "google_cloud_run_v2_service" "dashboard" {
     ignore_changes = [
       template[0].containers[0].image,
       template[0].containers[0].env,
+      client,
+      client_version,
+      template[0].labels,
     ]
   }
 }
@@ -400,6 +408,9 @@ resource "google_cloud_run_v2_service" "etl" {
     ignore_changes = [
       template[0].containers[0].image,
       template[0].containers[0].env,
+      client,
+      client_version,
+      template[0].labels,
     ]
   }
 }

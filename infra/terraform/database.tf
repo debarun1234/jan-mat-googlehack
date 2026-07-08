@@ -66,10 +66,23 @@ resource "google_sql_database" "janmat" {
 }
 
 # Application user
+# NOTE: Cloud SQL instance must be RUNNABLE for Terraform to read/write this resource.
+# If you run terraform apply while the DB is stopped (overnight cost-guard window),
+# start it first:
+#   gcloud sql instances patch janmat-db-poc --activation-policy=ALWAYS
+#   (wait ~60s)  then re-run terraform apply.
 resource "google_sql_user" "janmat_user" {
   name     = var.db_user
   instance = google_sql_database_instance.janmat_db.name
   password = var.db_password
+
+  depends_on = [google_sql_database_instance.janmat_db]
+
+  lifecycle {
+    # Password is managed outside Terraform after initial creation.
+    # Ignore to avoid spurious diffs and to prevent refresh errors when DB is stopped.
+    ignore_changes = [password]
+  }
 }
 
 # Store connection string in Secret Manager
