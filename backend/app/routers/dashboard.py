@@ -512,9 +512,10 @@ class CompletionRequest(BaseModel):
     radius_km: float
     submitted_lat: float
     submitted_lon: float
-    image_base64: str  # base64url or standard base64 encoded image bytes
+    image_base64: str = ""   # empty when citizen evidence was audio/text only
     mime_type: str = "image/jpeg"
     notes: str = ""
+    skip_ai_check: bool = False  # True when no image uploaded (audio/text complaint projects)
 
 
 @router.post("/projects/complete")
@@ -549,24 +550,46 @@ async def submit_project_completion(
     geo_threshold = max(body.radius_km + 0.5, 1.0)
     geo_verified = distance_km <= geo_threshold
 
-    # 2. Decode image
-    try:
-        padded = body.image_base64 + "=" * (-len(body.image_base64) % 4)
-        image_bytes = base64.b64decode(padded.replace("-", "+").replace("_", "/"))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+    # 2. Decode image (if provided)
+    image_bytes = b""
+    if body.image_base64:
+        try:
+            padded = body.image_base64 + "=" * (-len(body.image_base64) % 4)
+            image_bytes = base64.b64decode(padded.replace("-", "+").replace("_", "/"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
 
-    # 3. Gemini image verification
-    try:
-        ai_result = await gemini.verify_completion_image(
-            image_bytes=image_bytes,
-            mime_type=body.mime_type,
-            project_description=body.project_name,
-            category=body.category,
+    # 3. Gemini image verification — skipped when complaint evidence is audio/text only
+    from app.services.gemini import CompletionVerification
+    ai_skipped = body.skip_ai_check or not image_bytes
+
+    if ai_skipped:
+        ai_result = CompletionVerification(
+            verified=True,
+            confidence=100,
+            reasoning=(
+                "Image check skipped — citizen complaints for this project were "
+                "audio/text based with no photo evidence to compare against. "
+                "GPS proximity verification is the applicable check."
+            ),
+            issues=[],
         )
-    except Exception as e:
-        log.error("gemini_completion_failed", error=str(e), project=body.project_name)
-        raise HTTPException(status_code=500, detail=f"AI verification failed: {e}")
+        log.info(
+            "gemini_completion_skipped",
+            project=body.project_name,
+            reason="audio_text_complaints_no_image",
+        )
+    else:
+        try:
+            ai_result = await gemini.verify_completion_image(
+                image_bytes=image_bytes,
+                mime_type=body.mime_type,
+                project_description=body.project_name,
+                category=body.category,
+            )
+        except Exception as e:
+            log.error("gemini_completion_failed", error=str(e), project=body.project_name)
+            raise HTTPException(status_code=500, detail=f"AI verification failed: {e}")
 
     overall = geo_verified and ai_result.verified
 
@@ -630,6 +653,7 @@ async def submit_project_completion(
         "geo_distance_km": round(distance_km, 3),
         "geo_threshold_km": round(geo_threshold, 3),
         "ai_verified": ai_result.verified,
+        "ai_skipped": ai_skipped,
         "ai_confidence": ai_result.confidence,
         "ai_reasoning": ai_result.reasoning,
         "ai_issues": ai_result.issues,
@@ -658,56 +682,64 @@ async def get_budget(
     """
     TOTAL_BUDGET = 300.0
 
-    # Pricing constants (asia-south1, as of 2025)
-    BQ_PRICE_PER_TB = 6.25         # on-demand; first 1 TB/month free
-    BQ_FREE_TB      = 1.0
-    GCS_PRICE_PER_GB = 0.020        # standard storage / GB / month
-    CLOUD_SQL_MONTHLY = 7.65        # db-f1-micro fixed (730 hrs × $0.0105)
-    CLOUD_RUN_PER_REQ = 0.00000040  # rough: 200ms × 256MB × 0.25vCPU
-    # Gemini 2.5-flash-lite on AI Studio free tier → $0
-    # If Vertex: ~$0.0001 per call; we show $0 and note free tier
-    GEMINI_PER_CALL   = 0.0
+    # Pricing constants (asia-south1, 2025)
+    BQ_PRICE_PER_TB   = 6.25       # on-demand; first 1 TB/month free
+    BQ_FREE_TB        = 1.0
+    GCS_PRICE_PER_GB  = 0.020      # standard storage / GB / month
+    CLOUD_SQL_MONTHLY = 7.65       # db-f1-micro fixed (730 hrs × $0.0105)
+    CLOUD_RUN_PER_REQ = 0.00000040 # rough: 200ms × 256MB × 0.25 vCPU
+    GEMINI_PER_CALL   = 0.0        # AI Studio free tier
 
-    # ── Fetch real metrics in parallel ──────────────────────────────
-    bq_task  = bq.get_usage_stats(region="asia-south1")
-    gcs_task = gcs.get_bucket_usage()
-    bq_usage, gcs_usage = await asyncio.gather(bq_task, gcs_task, return_exceptions=True)
+    now           = datetime.now(timezone.utc)
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    days_elapsed  = max(now.day, 1)
 
-    if isinstance(bq_usage, Exception):
-        log.warning("budget_bq_usage_failed", error=str(bq_usage))
-        bq_usage = {}
-    if isinstance(gcs_usage, Exception):
-        log.warning("budget_gcs_usage_failed", error=str(gcs_usage))
-        gcs_usage = {}
+    # ── Fetch metrics — each has its own timeout inside, but cap the
+    #    whole gather at 20s so the endpoint always responds promptly ─
+    bq_usage: dict  = {}
+    gcs_usage: dict = {}
+    try:
+        bq_raw, gcs_raw = await asyncio.wait_for(
+            asyncio.gather(
+                bq.get_usage_stats(region="asia-south1"),
+                gcs.get_bucket_usage(),
+                return_exceptions=True,
+            ),
+            timeout=20.0,
+        )
+        bq_usage  = bq_raw  if isinstance(bq_raw,  dict) else {}
+        gcs_usage = gcs_raw if isinstance(gcs_raw, dict) else {}
+        if isinstance(bq_raw, Exception):
+            log.warning("budget_bq_failed",  error=str(bq_raw))
+        if isinstance(gcs_raw, Exception):
+            log.warning("budget_gcs_failed", error=str(gcs_raw))
+    except asyncio.TimeoutError:
+        log.warning("budget_gather_timeout")
+    except Exception as exc:
+        log.warning("budget_gather_error", error=str(exc))
 
     # ── Calculate costs ─────────────────────────────────────────────
-    bq_bytes     = bq_usage.get("bq_bytes_processed", 0)
-    bq_tb        = bq_bytes / 1e12
-    bq_cost      = max(0.0, (bq_tb - BQ_FREE_TB)) * BQ_PRICE_PER_TB
+    bq_bytes = int(bq_usage.get("bq_bytes_processed") or 0)
+    bq_tb    = bq_bytes / 1e12
+    bq_cost  = max(0.0, (bq_tb - BQ_FREE_TB)) * BQ_PRICE_PER_TB
 
-    gcs_bytes    = gcs_usage.get("total_bytes", 0)
-    gcs_gb       = gcs_bytes / 1e9
-    gcs_cost     = gcs_gb * GCS_PRICE_PER_GB
+    gcs_bytes = int(gcs_usage.get("total_bytes") or 0)
+    gcs_gb    = gcs_bytes / 1e9
+    gcs_cost  = gcs_gb * GCS_PRICE_PER_GB
 
-    total_subs   = bq_usage.get("total_submissions", 0)
+    total_subs     = int(bq_usage.get("total_submissions") or 0)
     cloud_run_cost = total_subs * CLOUD_RUN_PER_REQ
     gemini_cost    = total_subs * GEMINI_PER_CALL
-
-    # Cloud SQL: prorate for days elapsed this month
-    now = datetime.now(timezone.utc)
-    days_in_month  = calendar.monthrange(now.year, now.month)[1]
-    days_elapsed   = now.day
     cloud_sql_cost = CLOUD_SQL_MONTHLY * (days_elapsed / days_in_month)
 
-    total_spent = bq_cost + cloud_sql_cost + gcs_cost + cloud_run_cost + gemini_cost
-    remaining   = max(0.0, TOTAL_BUDGET - total_spent)
-
-    # Monthly burn rate (annualise from days elapsed)
-    if days_elapsed > 0:
-        monthly_rate = (total_spent / days_elapsed) * days_in_month
-    else:
-        monthly_rate = CLOUD_SQL_MONTHLY  # fallback: at minimum SQL cost
+    total_spent   = bq_cost + cloud_sql_cost + gcs_cost + cloud_run_cost + gemini_cost
+    remaining     = max(0.0, TOTAL_BUDGET - total_spent)
+    monthly_rate  = (total_spent / days_elapsed) * days_in_month
     runway_months = (remaining / monthly_rate) if monthly_rate > 0 else 999.0
+
+    # Flag which sources had real data vs fell back to 0
+    bq_live  = bool(bq_usage.get("bq_bytes_available"))
+    gcs_live = gcs_bytes > 0
 
     log.info(
         "budget_calculated",
@@ -715,31 +747,35 @@ async def get_budget(
         bq_tb=round(bq_tb, 6),
         gcs_gb=round(gcs_gb, 3),
         total_subs=total_subs,
+        bq_live=bq_live,
+        gcs_live=gcs_live,
     )
 
     return {
-        "total_budget":    TOTAL_BUDGET,
-        "total_spent":     round(total_spent, 2),
-        "remaining":       round(remaining, 2),
-        "pct_used":        round(total_spent / TOTAL_BUDGET * 100, 2),
-        "monthly_rate":    round(monthly_rate, 2),
-        "runway_months":   round(runway_months, 1),
+        "total_budget":  TOTAL_BUDGET,
+        "total_spent":   round(total_spent, 2),
+        "remaining":     round(remaining, 2),
+        "pct_used":      round(total_spent / TOTAL_BUDGET * 100, 2),
+        "monthly_rate":  round(monthly_rate, 2),
+        "runway_months": round(runway_months, 1),
         "breakdown": {
-            "cloud_sql":      round(cloud_sql_cost, 2),
-            "bigquery":       round(bq_cost, 4),
-            "cloud_storage":  round(gcs_cost, 4),
-            "cloud_run":      round(cloud_run_cost, 4),
-            "gemini_api":     round(gemini_cost, 2),
-            "gemini_note":    "AI Studio free tier" if GEMINI_PER_CALL == 0 else "Vertex AI",
+            "cloud_sql":     round(cloud_sql_cost, 2),
+            "bigquery":      round(bq_cost, 4),
+            "cloud_storage": round(gcs_cost, 4),
+            "cloud_run":     round(cloud_run_cost, 4),
+            "gemini_api":    round(gemini_cost, 2),
+            "gemini_note":   "AI Studio free tier" if GEMINI_PER_CALL == 0 else "Vertex AI",
         },
         "usage_metrics": {
             "bq_tb_processed_month": round(bq_tb, 6),
-            "bq_job_count":          bq_usage.get("bq_job_count", 0),
+            "bq_job_count":          int(bq_usage.get("bq_job_count") or 0),
+            "bq_live":               bq_live,
             "gcs_storage_gb":        round(gcs_gb, 3),
-            "gcs_object_count":      gcs_usage.get("total_objects", 0),
+            "gcs_object_count":      int(gcs_usage.get("total_objects") or 0),
+            "gcs_live":              gcs_live,
             "total_submissions":     total_subs,
-            "audio_submissions":     bq_usage.get("audio_submissions", 0),
-            "image_submissions":     bq_usage.get("image_submissions", 0),
+            "audio_submissions":     int(bq_usage.get("audio_submissions") or 0),
+            "image_submissions":     int(bq_usage.get("image_submissions") or 0),
         },
         "as_of": now.isoformat(),
     }

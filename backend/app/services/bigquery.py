@@ -246,11 +246,12 @@ class BigQueryService:
         FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
         WHERE constituency_id = @constituency_id
           AND category = @category
+          AND input_type IN ('image', 'audio')   -- text submissions have no visual media
           AND raw_input_gcs_uri IS NOT NULL
           AND raw_input_gcs_uri != ''
           AND processing_status = 'processed'
         ORDER BY
-            CASE input_type WHEN 'image' THEN 0 WHEN 'audio' THEN 1 ELSE 2 END ASC,
+            CASE input_type WHEN 'image' THEN 0 ELSE 1 END ASC,  -- images first
             urgency_rating DESC,
             submitted_at DESC
         LIMIT @limit
@@ -835,50 +836,71 @@ class BigQueryService:
         """
         Return real GCP usage metrics for the budget tracker.
 
-        Queries:
-          - INFORMATION_SCHEMA.JOBS_BY_PROJECT  → bytes processed this month
-          - citizen_grievances count            → submission / Gemini API call count
-        """
-        # 1. BQ bytes processed this month
-        bq_sql = f"""
-        SELECT
-            COALESCE(SUM(total_bytes_processed), 0)      AS bytes_processed,
-            COUNT(*)                                      AS job_count,
-            COALESCE(SUM(total_slot_ms), 0)              AS slot_ms
-        FROM `region-{region}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
-        WHERE creation_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
-          AND state = 'DONE'
-        """
+        Each query runs independently with a timeout so one slow/unavailable
+        source never blocks the whole response.
 
-        # 2. Submission count (each = 1 Gemini + 1 Speech-to-Text call)
-        sub_sql = f"""
-        SELECT
-            COUNT(*) AS total,
-            COUNTIF(processing_status = 'processed')  AS processed,
-            COUNTIF(input_type = 'audio')             AS audio_count,
-            COUNTIF(input_type = 'image')             AS image_count,
-            COUNTIF(input_type = 'text')              AS text_count
-        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        BQ bytes: INFORMATION_SCHEMA.JOBS_BY_PROJECT (needs location set +
+        bigquery.jobs.list permission — falls back to 0 on any failure).
+        Submission count: our own citizen_grievances table (reliable).
         """
+        # ── 1. BQ bytes processed this month ────────────────────────
+        # INFORMATION_SCHEMA.JOBS_BY_PROJECT must be queried in the correct
+        # region via the QueryJobConfig location field.
+        bq_stats: dict = {}
+        try:
+            bq_sql = f"""
+            SELECT
+                COALESCE(SUM(total_bytes_processed), 0) AS bytes_processed,
+                COUNT(*)                                 AS job_count,
+                COALESCE(SUM(total_slot_ms), 0)         AS slot_ms
+            FROM `region-{region}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+            WHERE creation_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+              AND state = 'DONE'
+            """
+            rows = await asyncio.wait_for(
+                self._run_query(
+                    bq_sql,
+                    bigquery.QueryJobConfig(location=region),
+                ),
+                timeout=12.0,
+            )
+            bq_stats = rows[0] if rows else {}
+        except Exception as exc:
+            log.warning(
+                "bq_information_schema_unavailable",
+                error=str(exc),
+                hint="Grant bigquery.jobs.list to the service account",
+            )
 
-        bq_rows, sub_rows = await asyncio.gather(
-            self._run_query(bq_sql, bigquery.QueryJobConfig()),
-            self._run_query(sub_sql, bigquery.QueryJobConfig()),
-            return_exceptions=True,
-        )
-
-        bq_stats = bq_rows[0] if isinstance(bq_rows, list) and bq_rows else {}
-        sub_stats = sub_rows[0] if isinstance(sub_rows, list) and sub_rows else {}
+        # ── 2. Submission count from our own table (reliable) ────────
+        sub_stats: dict = {}
+        try:
+            sub_sql = f"""
+            SELECT
+                COUNT(*)                                   AS total,
+                COUNTIF(processing_status = 'processed')   AS processed,
+                COUNTIF(input_type = 'audio')              AS audio_count,
+                COUNTIF(input_type = 'image')              AS image_count,
+                COUNTIF(input_type = 'text')               AS text_count
+            FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+            """
+            rows = await asyncio.wait_for(
+                self._run_query(sub_sql, bigquery.QueryJobConfig()),
+                timeout=12.0,
+            )
+            sub_stats = rows[0] if rows else {}
+        except Exception as exc:
+            log.warning("bq_submission_count_failed", error=str(exc))
 
         return {
-            "bq_bytes_processed": int(bq_stats.get("bytes_processed") or 0),
-            "bq_job_count":       int(bq_stats.get("job_count") or 0),
-            "bq_slot_ms":         int(bq_stats.get("slot_ms") or 0),
-            "total_submissions":  int(sub_stats.get("total") or 0),
+            "bq_bytes_processed":    int(bq_stats.get("bytes_processed") or 0),
+            "bq_job_count":          int(bq_stats.get("job_count") or 0),
+            "bq_bytes_available":    isinstance(bq_stats.get("bytes_processed"), (int, float)),
+            "total_submissions":     int(sub_stats.get("total") or 0),
             "processed_submissions": int(sub_stats.get("processed") or 0),
-            "audio_submissions":  int(sub_stats.get("audio_count") or 0),
-            "image_submissions":  int(sub_stats.get("image_count") or 0),
-            "text_submissions":   int(sub_stats.get("text_count") or 0),
+            "audio_submissions":     int(sub_stats.get("audio_count") or 0),
+            "image_submissions":     int(sub_stats.get("image_count") or 0),
+            "text_submissions":      int(sub_stats.get("text_count") or 0),
         }
 
 

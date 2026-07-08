@@ -116,9 +116,10 @@ class StorageService:
 
         return await asyncio.get_event_loop().run_in_executor(None, _sync_download)
 
-    async def get_bucket_usage(self) -> dict:
+    async def get_bucket_usage(self, max_blobs: int = 5000) -> dict:
         """
         Return total object count + total bytes across the media bucket.
+        Caps at max_blobs to avoid iterating millions of objects in a POC.
         Used by the budget tracker to calculate real GCS storage cost.
         """
         import asyncio
@@ -127,15 +128,22 @@ class StorageService:
             client = self._get_client()
             total_bytes = 0
             total_objects = 0
-            for blob in client.list_blobs(self._bucket_name):
+            for blob in client.list_blobs(self._bucket_name, max_results=max_blobs):
                 total_bytes += blob.size or 0
                 total_objects += 1
-            return {"total_bytes": total_bytes, "total_objects": total_objects}
+            return {
+                "total_bytes": total_bytes,
+                "total_objects": total_objects,
+                "capped": total_objects >= max_blobs,
+            }
 
         try:
-            return await asyncio.get_event_loop().run_in_executor(None, _sync)
+            return await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _sync),
+                timeout=10.0,
+            )
         except Exception:
-            return {"total_bytes": 0, "total_objects": 0}
+            return {"total_bytes": 0, "total_objects": 0, "capped": False}
 
     async def get_signed_url(self, gcs_uri: str, expiration_seconds: int = 300) -> str:
         """Generate a signed download URL for a GCS object (for debugging/admin only)."""

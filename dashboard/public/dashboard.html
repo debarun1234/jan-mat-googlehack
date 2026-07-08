@@ -586,6 +586,27 @@ tr:last-child td{border-bottom:none}
     <button class="btn btn-success" onclick="exportCSV()">⬇ Export CSV</button>
   </div>
   <div id="projects-list"><div class="loading"><div class="spinner"></div>Loading ranked projects...</div></div>
+
+  <!-- ── Archived / Completed Projects ── -->
+  <div id="archived-section" style="display:none;margin-top:28px">
+    <div onclick="toggleArchived()"
+         style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 16px;
+                background:var(--surface2);border-radius:10px;border:1px solid var(--border);
+                user-select:none;transition:background .15s"
+         onmouseover="this.style.background='var(--surface3)'"
+         onmouseout="this.style.background='var(--surface2)'">
+      <span style="font-size:1.1rem">📁</span>
+      <div style="flex:1">
+        <span style="font-weight:700;color:var(--text-primary)">Completed Projects</span>
+        <span id="archived-count-badge"
+              style="margin-left:8px;background:#2e7d32;color:#fff;font-size:.7rem;
+                     font-weight:700;padding:2px 8px;border-radius:20px">0</span>
+      </div>
+      <span style="font-size:.75rem;color:var(--muted)">Click to expand history</span>
+      <span id="archived-chevron" style="color:var(--muted);font-size:.85rem;transition:transform .2s">▼</span>
+    </div>
+    <div id="archived-list" style="display:none;margin-top:12px"></div>
+  </div>
 </div>
 
 <!-- ═══════════ PAGE: HEATMAP ═══════════ -->
@@ -887,6 +908,8 @@ let activeMarkers = [], markerClusterer = null;
 let mapMode = 'heat', activeCategory = null;
 let charts = {};
 let projectsList = [];
+let archivedProjects = [];  // completed projects — kept in-session for history
+let archivedOpen = false;
 const CAT_COLORS = {
   Education:'#1565c0', Health:'#c62828', Roads:'#e65100',
   Water:'#00695c', Sanitation:'#4a148c', Electricity:'#f57f17', Other:'#607d8b'
@@ -1166,35 +1189,40 @@ async function loadProjects() {
                 <div style="font-size:.65rem;font-weight:700;color:#558b2f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔍 Evidence Log</div>
                 <div style="font-size:.82rem;color:#37474f;line-height:1.6">${p.evidence_log}</div>
               </div>`:''}
-              ${p.complaint_media?.length?`
-              <div style="margin-bottom:10px">
-                <div style="font-size:.65rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📎 Citizen Evidence (${p.complaint_media.length})</div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
-                  ${p.complaint_media.map(m => {
-                    if (m.input_type === 'image') {
-                      const caption = (m.summary_en||'').replace(/"/g,'&quot;');
-                      return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;max-width:120px">
-                        <img src="/api/media/${m.submission_id}"
-                             style="width:110px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block;cursor:pointer"
-                             title="${caption}"
-                             onclick="window.open('/api/media/${m.submission_id}','_blank')"
-                             onerror="this.parentElement.style.display='none'">
-                        ${m.summary_en?`<div style="font-size:.65rem;color:#546e7a;line-height:1.3;text-align:center;max-width:110px">${m.summary_en.substring(0,60)}${m.summary_en.length>60?'…':''}</div>`:''}
-                      </div>`;
-                    } else if (m.input_type === 'audio') {
-                      return `<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;border:1px solid #ddd;min-width:240px;max-width:320px">
-                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-                          <span style="font-size:.75rem;font-weight:700;color:#1a237e">🎙️ Voice Complaint</span>
-                        </div>
-                        ${m.summary_en?`<div style="font-size:.78rem;color:#37474f;line-height:1.5;margin-bottom:8px;background:#fff;border-radius:6px;padding:8px;border-left:3px solid #5c6bc0">${m.summary_en}</div>`:''}
-                        <audio controls src="/api/media/${m.submission_id}" style="width:100%;height:32px" preload="none"></audio>
-                      </div>`;
-                    } else {
-                      return '';
-                    }
-                  }).join('')}
-                </div>
-              </div>`:''}
+              ${(()=>{
+                const media = (p.complaint_media||[]).filter(m=>m.input_type==='image'||m.input_type==='audio');
+                if (!media.length) return '';
+                const imgCount   = media.filter(m=>m.input_type==='image').length;
+                const audioCount = media.filter(m=>m.input_type==='audio').length;
+                const label = imgCount && audioCount ? `📎 Photo & Voice Evidence (${media.length})`
+                            : imgCount               ? `📷 Photo Evidence (${imgCount})`
+                            :                          `🎙️ Voice Complaints (${audioCount})`;
+                return `<div style="margin-bottom:10px">
+                  <div style="font-size:.65rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${label}</div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+                    ${media.map(m => {
+                      if (m.input_type === 'image') {
+                        const caption = (m.summary_en||'').replace(/"/g,'&quot;');
+                        return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;max-width:120px">'
+                          + '<img src="/api/media/'+m.submission_id+'"'
+                          + ' style="width:110px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block;cursor:pointer"'
+                          + ' title="'+caption+'"'
+                          + ' onclick="window.open(\'/api/media/'+m.submission_id+'\',\'_blank\')"'
+                          + ' onerror="this.parentElement.style.display=\'none\'">'
+                          + (m.summary_en ? '<div style="font-size:.65rem;color:#546e7a;line-height:1.3;text-align:center;max-width:110px">'
+                              + m.summary_en.substring(0,60)+(m.summary_en.length>60?'…':'')+'</div>' : '')
+                          + '</div>';
+                      } else {
+                        return '<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;border:1px solid #ddd;min-width:240px;max-width:320px">'
+                          + '<div style="font-size:.75rem;font-weight:700;color:#1a237e;margin-bottom:6px">🎙️ Voice Complaint</div>'
+                          + (m.summary_en ? '<div style="font-size:.78rem;color:#37474f;line-height:1.5;margin-bottom:8px;background:#fff;border-radius:6px;padding:8px;border-left:3px solid #5c6bc0">'+m.summary_en+'</div>' : '')
+                          + '<audio controls src="/api/media/'+m.submission_id+'" style="width:100%;height:32px" preload="none"></audio>'
+                          + '</div>';
+                      }
+                    }).join('')}
+                  </div>
+                </div>`;
+              })()}
               <div style="display:flex;justify-content:flex-end;margin-top:12px">
                 <button class="btn-complete" onclick="openCompletionModal(${i})">
                   ✅ Mark Complete
@@ -1602,23 +1630,51 @@ function filterUsersTable() {
 // ── Budget Tracker ─────────────────────────────────────────────────
 async function loadBudget() {
   const body = document.getElementById('budget-body');
+  if (!body) return;
+
+  body.innerHTML = '<div class="loading" style="font-size:.82rem">Loading GCP usage…</div>';
+
+  let d = null;
   try {
-    const d = await fetch('/api/budget').then(r => r.json());
-    const pct   = Math.min(d.pct_used, 100);
+    // 25-second client-side timeout (backend caps at 20s, plus network headroom)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    const resp = await fetch('/api/budget', { signal: controller.signal });
+    clearTimeout(timer);
+    d = await resp.json();
+  } catch(e) {
+    body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">
+      ⚠️ Budget data unavailable: ${e.name === 'AbortError' ? 'Request timed out' : e.message}
+    </div>`;
+    return;
+  }
+
+  // If backend returned an error JSON instead of the budget object
+  if (d.error || d.total_budget == null) {
+    body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">
+      ⚠️ ${d.error || 'Budget endpoint returned unexpected data'}
+    </div>`;
+    return;
+  }
+
+  try {
+    const pct   = Math.min(+(d.pct_used) || 0, 100);
     const barColor = pct < 50 ? 'linear-gradient(90deg,#2e7d32,#4caf50)'
                    : pct < 80 ? 'linear-gradient(90deg,#e65100,#ff9800)'
                    :            'linear-gradient(90deg,#c62828,#ef5350)';
-    const spent  = d.total_spent.toFixed(2);
-    const remain = d.remaining.toFixed(2);
-    const runway = d.runway_months >= 99 ? '99+ mo' : d.runway_months.toFixed(1) + ' mo';
-    const monthly = d.monthly_rate < 0.01 ? '<$0.01' : '$' + d.monthly_rate.toFixed(2);
+    const spent   = (+d.total_spent || 0).toFixed(2);
+    const remain  = (+d.remaining   || 0).toFixed(2);
+    const runway  = (+d.runway_months || 0) >= 99 ? '99+ mo' : (+d.runway_months || 0).toFixed(1) + ' mo';
+    const monthly = (+d.monthly_rate || 0) < 0.01 ? '<$0.01' : '$' + (+d.monthly_rate).toFixed(2);
+    const b = d.breakdown       || {};
+    const m = d.usage_metrics   || {};
 
-    const b = d.breakdown || {};
-    const m = d.usage_metrics || {};
+    const bqLabel  = m.bq_live  ? '' : ' <span style="color:#e65100;font-size:.65rem" title="INFORMATION_SCHEMA unavailable">est.</span>';
+    const gcsLabel = m.gcs_live ? '' : ' <span style="color:#e65100;font-size:.65rem" title="GCS list unavailable">est.</span>';
 
     body.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
-        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$${d.total_budget.toFixed(0)}</div><div class="db-metric-label">Total Budget</div></div>
+        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$${(+d.total_budget||300).toFixed(0)}</div><div class="db-metric-label">Total Budget</div></div>
         <div class="db-metric"><div class="db-metric-value">${monthly}</div><div class="db-metric-label">Est. Monthly</div></div>
         <div class="db-metric"><div class="db-metric-value" style="color:${pct<80?'#2e7d32':'#c62828'}">$${remain}</div><div class="db-metric-label">Remaining</div></div>
         <div class="db-metric"><div class="db-metric-value">${runway}</div><div class="db-metric-label">Runway</div></div>
@@ -1627,22 +1683,21 @@ async function loadBudget() {
         <div class="progress-fill" style="width:${pct}%;background:${barColor};transition:width .6s"></div>
       </div>
       <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px">
-        ${pct.toFixed(1)}% of $${d.total_budget} used
-        · $${spent} total spend (month-to-date)
+        ${pct.toFixed(1)}% of $${+d.total_budget||300} used · $${spent} spend month-to-date
       </div>
       <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cost Breakdown</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem">
         <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>☁️ Cloud SQL</span><strong>$${b.cloud_sql}</strong>
+          <span>☁️ Cloud SQL</span><strong>$${(+(b.cloud_sql)||0).toFixed(2)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>📊 BigQuery</span><strong>$${(+b.bigquery).toFixed(4)}</strong>
+          <span>📊 BigQuery${bqLabel}</span><strong>$${(+(b.bigquery)||0).toFixed(4)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>🗄️ Cloud Storage</span><strong>$${(+b.cloud_storage).toFixed(4)}</strong>
+          <span>🗄️ Cloud Storage${gcsLabel}</span><strong>$${(+(b.cloud_storage)||0).toFixed(4)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
-          <span>🚀 Cloud Run</span><strong>$${(+b.cloud_run).toFixed(4)}</strong>
+          <span>🚀 Cloud Run</span><strong>$${(+(b.cloud_run)||0).toFixed(4)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px;grid-column:span 2">
           <span>🤖 Gemini API</span>
@@ -1650,18 +1705,19 @@ async function loadBudget() {
         </div>
       </div>
       <div style="margin-top:12px;font-size:.72rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
-        <span>📥 ${m.total_submissions || 0} submissions</span>
-        <span>🎙️ ${m.audio_submissions || 0} audio</span>
-        <span>📷 ${m.image_submissions || 0} images</span>
-        <span>📊 ${m.bq_job_count || 0} BQ jobs</span>
-        <span>💾 ${(+(m.gcs_storage_gb||0)).toFixed(3)} GB stored</span>
-        <span>🔍 ${(+(m.bq_tb_processed_month||0)*1000).toFixed(4)} GB processed</span>
+        <span>📥 ${m.total_submissions||0} submissions</span>
+        <span>🎙️ ${m.audio_submissions||0} audio</span>
+        <span>📷 ${m.image_submissions||0} images</span>
+        <span>📊 ${m.bq_job_count||0} BQ jobs</span>
+        <span>💾 ${(+(m.gcs_storage_gb)||0).toFixed(3)} GB stored</span>
+        <span>🔍 ${((+(m.bq_tb_processed_month)||0)*1000).toFixed(4)} GB processed</span>
       </div>`;
 
     const ts = document.getElementById('budget-refresh-time');
-    if(ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch(e) {
-    body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">Failed to load budget data: ${e.message}</div>`;
+    if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  } catch(renderErr) {
+    body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">Render error: ${renderErr.message}</div>`;
   }
 }
 
@@ -1800,13 +1856,23 @@ document.addEventListener('DOMContentLoaded', init);
     <div class="cm-body">
       <!-- Image Upload -->
       <div class="cm-section">
-        <div class="cm-lbl">📷 Completion Photo <span style="color:#c62828">*</span></div>
+        <div class="cm-lbl">
+          <span id="cm-photo-label">📷 Completion Photo</span>
+          <span id="cm-photo-req-star" style="color:#c62828"> *</span>
+        </div>
+        <div id="cm-photo-opt-note" style="display:none;font-size:.75rem;color:#e65100;
+             background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;padding:7px 10px;
+             margin-bottom:8px">
+          ⚠️ Citizen complaints for this project were <strong>audio/text only</strong> — no complaint
+          images to compare against. GPS verification is sufficient; photo upload is optional.
+        </div>
+        <div id="cm-photo-hint" style="font-size:.72rem;color:#90a4ae;margin-bottom:6px"></div>
         <div class="cm-upload-zone" id="cm-upload-zone" onclick="document.getElementById('cm-file-input').click()">
           <input type="file" id="cm-file-input" accept="image/*" onchange="handleImageUpload(this)">
           <div id="cm-upload-placeholder">
             <div style="font-size:2rem;margin-bottom:6px">📷</div>
             <div style="font-size:.85rem;font-weight:700;color:#3f51b5">Click to upload photo</div>
-            <div style="font-size:.75rem;color:#90a4ae;margin-top:4px">JPG, PNG, WEBP — max 10 MB</div>
+            <div style="font-size:.75rem;color:#90a4ae;margin-top:4px">JPG, PNG, WEBP — max 20 MB</div>
           </div>
           <img id="cm-img-preview" alt="Preview">
         </div>
@@ -1856,6 +1922,7 @@ document.addEventListener('DOMContentLoaded', init);
 let completionProject = null;
 let completionLat = null, completionLon = null;
 let completionImageB64 = null, completionMime = null;
+let completionImageRequired = true; // false when project has no citizen image evidence
 
 // ── MP Profile Dropdown ────────────────────────────────────────────────
 function toggleMpDropdown() {
@@ -1888,6 +1955,31 @@ function openCompletionModal(idx) {
   if (!completionProject) return;
   completionLat = null; completionLon = null;
   completionImageB64 = null; completionMime = null;
+
+  // Determine whether photo is required based on citizen evidence type
+  const media = completionProject.complaint_media || [];
+  const hasImageEvidence = media.some(function(m) { return m.input_type === 'image'; });
+  completionImageRequired = hasImageEvidence;
+
+  // ── Adapt upload zone label & requirement indicator ──
+  const photoLbl = document.getElementById('cm-photo-label');
+  const photoHint = document.getElementById('cm-photo-hint');
+  const photoReqStar = document.getElementById('cm-photo-req-star');
+  const photoOptNote = document.getElementById('cm-photo-opt-note');
+
+  if (hasImageEvidence) {
+    // Citizen submitted photos — MP photo will be compared
+    if (photoLbl)      photoLbl.textContent = '📷 Completion Photo';
+    if (photoReqStar)  photoReqStar.style.display = '';
+    if (photoOptNote)  photoOptNote.style.display = 'none';
+    if (photoHint)     photoHint.textContent = 'Photo compared against citizen complaint images by Gemini';
+  } else {
+    // Audio/text complaints only — no citizen images to compare
+    if (photoLbl)      photoLbl.textContent = '📷 Completion Photo (optional)';
+    if (photoReqStar)  photoReqStar.style.display = 'none';
+    if (photoOptNote)  photoOptNote.style.display = '';
+    if (photoHint)     photoHint.textContent = 'GPS verification is sufficient — citizen evidence was audio/text only';
+  }
 
   document.getElementById('cm-project-title').textContent = completionProject.suggested_project;
   document.getElementById('cm-project-cat').textContent = completionProject.category + ' · Rank #' + completionProject.rank;
@@ -1974,7 +2066,10 @@ function captureLocation() {
 
 async function submitCompletion() {
   if (!completionProject) return;
-  if (!completionImageB64) { notify('Please upload a completion photo', 'error'); return; }
+  if (completionImageRequired && !completionImageB64) {
+    notify('Please upload a completion photo — citizen image evidence requires visual verification', 'error');
+    return;
+  }
   if (completionLat === null) { notify('Please capture your location first', 'error'); return; }
 
   const btn = document.getElementById('cm-submit-btn');
@@ -1988,9 +2083,11 @@ async function submitCompletion() {
   document.getElementById('cm-geo-badge').className = 'cm-badge';
   document.getElementById('cm-geo-badge').textContent = '…';
   document.getElementById('cm-ai-badge').className = 'cm-badge';
-  document.getElementById('cm-ai-badge').textContent = '…';
+  document.getElementById('cm-ai-badge').textContent = completionImageB64 ? '…' : '⏭';
   document.getElementById('cm-geo-result-text').textContent = 'Checking GPS distance to project site...';
-  document.getElementById('cm-ai-result-text').textContent = 'Gemini is analysing your photo...';
+  document.getElementById('cm-ai-result-text').textContent = completionImageB64
+    ? 'Gemini is analysing your photo...'
+    : 'Skipped — no citizen image evidence for this project type';
   document.getElementById('cm-ai-issues').style.display = 'none';
 
   try {
@@ -2005,9 +2102,10 @@ async function submitCompletion() {
         radius_km:     completionProject.radius_km,
         submitted_lat: completionLat,
         submitted_lon: completionLon,
-        image_base64:  completionImageB64,
+        image_base64:  completionImageB64 || '',
         mime_type:     completionMime || 'image/jpeg',
         notes:         document.getElementById('cm-notes').value,
+        skip_ai_check: !completionImageB64,  // true when no photo uploaded
       }),
     });
     const data = await resp.json();
@@ -2023,16 +2121,23 @@ async function submitCompletion() {
 
     // AI result
     const aiBadge = document.getElementById('cm-ai-badge');
-    aiBadge.className = 'cm-badge ' + (data.ai_verified ? 'ok' : 'no');
-    aiBadge.textContent = data.ai_verified ? '✓' : '✗';
-    document.getElementById('cm-ai-result-text').innerHTML =
-      '<strong>' + (data.ai_verified ? 'AI verified' : 'AI rejected') + '</strong> (' + data.ai_confidence + '% confidence) — ' + data.ai_reasoning;
-
-    if (!data.ai_verified && data.ai_issues?.length) {
-      const issuesEl = document.getElementById('cm-ai-issues');
-      issuesEl.style.display = 'block';
-      issuesEl.innerHTML = '<div style="font-size:.75rem;font-weight:700;color:#c62828;margin-bottom:4px">Issues:</div>' +
-        data.ai_issues.map(function(i) { return '<div style="font-size:.78rem;color:#c62828;margin-bottom:2px">• ' + i + '</div>'; }).join('');
+    if (data.ai_skipped) {
+      aiBadge.className = 'cm-badge';
+      aiBadge.textContent = '⏭';
+      aiBadge.style.background = '#e3f2fd'; aiBadge.style.color = '#1565c0';
+      document.getElementById('cm-ai-result-text').innerHTML =
+        '<strong>Image check skipped</strong> — ' + data.ai_reasoning;
+    } else {
+      aiBadge.className = 'cm-badge ' + (data.ai_verified ? 'ok' : 'no');
+      aiBadge.textContent = data.ai_verified ? '✓' : '✗';
+      document.getElementById('cm-ai-result-text').innerHTML =
+        '<strong>' + (data.ai_verified ? 'AI verified' : 'AI rejected') + '</strong> (' + data.ai_confidence + '% confidence) — ' + data.ai_reasoning;
+      if (!data.ai_verified && data.ai_issues?.length) {
+        const issuesEl = document.getElementById('cm-ai-issues');
+        issuesEl.style.display = 'block';
+        issuesEl.innerHTML = '<div style="font-size:.75rem;font-weight:700;color:#c62828;margin-bottom:4px">Issues:</div>' +
+          data.ai_issues.map(function(i) { return '<div style="font-size:.78rem;color:#c62828;margin-bottom:2px">• ' + i + '</div>'; }).join('');
+      }
     }
 
     // Overall result
@@ -2042,7 +2147,19 @@ async function submitCompletion() {
       : '❌ Verification Failed — Completion Not Recorded';
 
     if (data.overall_verified) {
-      // Remove project card from DOM
+      // Archive the project with completion metadata
+      archivedProjects.unshift({
+        project:        completionProject,
+        completionId:   data.completion_id,
+        completedAt:    new Date().toISOString(),
+        aiConfidence:   data.ai_confidence,
+        aiReasoning:    data.ai_reasoning,
+        geoDistanceKm:  data.geo_distance_km,
+        geoThresholdKm: data.geo_threshold_km,
+        notes:          document.getElementById('cm-notes').value,
+      });
+
+      // Slide active card out, then remove
       const card = document.querySelector('[data-project-rank="' + completionProject.rank + '"]');
       if (card) {
         card.style.transition = 'opacity .5s,transform .5s';
@@ -2051,7 +2168,11 @@ async function submitCompletion() {
         setTimeout(function() { card.remove(); }, 500);
       }
       projectsList = projectsList.filter(function(p) { return p.rank !== completionProject.rank; });
-      notify('✅ Project #' + completionProject.rank + ' marked complete and removed from list', 'success');
+
+      // Show / refresh archived section
+      renderArchivedSection();
+
+      notify('✅ Project #' + completionProject.rank + ' completed and archived', 'success');
       btn.textContent = '✅ Verified!';
       setTimeout(closeCompletionModal, 2500);
     } else {
@@ -2067,6 +2188,82 @@ async function submitCompletion() {
     btn.disabled = false;
     btn.textContent = '🔄 Try Again';
   }
+}
+
+// ── Archived Projects ───────────────────────────────────────────────
+function renderArchivedSection() {
+  const section = document.getElementById('archived-section');
+  const list    = document.getElementById('archived-list');
+  const badge   = document.getElementById('archived-count-badge');
+  if (!section || !list) return;
+
+  const n = archivedProjects.length;
+  badge.textContent = n;
+  section.style.display = n ? '' : 'none';
+
+  list.innerHTML = archivedProjects.map(function(a) {
+    const p   = a.project;
+    const ts  = new Date(a.completedAt).toLocaleString();
+    const cat = p.category || '';
+    const catColor = { Education:'#1565c0', Health:'#c62828', Roads:'#e65100',
+                       Water:'#00695c', Sanitation:'#4a148c', Other:'#607d8b' }[cat] || '#607d8b';
+    return `<div class="card" style="margin-bottom:10px;border-left:4px solid #2e7d32;opacity:.92">
+      <div class="card-body" style="padding:14px 18px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <!-- Rank badge — completed -->
+          <div style="width:40px;height:40px;border-radius:50%;background:#e8f5e9;border:2px solid #2e7d32;
+                      display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="font-size:1.1rem">✅</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+              <span style="font-size:.7rem;font-weight:700;color:#fff;background:${catColor};
+                           padding:2px 8px;border-radius:12px">${cat}</span>
+              <span style="font-size:.7rem;color:var(--muted)">Rank #${p.rank} · Completed ${ts}</span>
+            </div>
+            <div style="font-weight:700;font-size:.95rem;color:var(--text-primary);margin-bottom:8px">
+              ${p.suggested_project}
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;font-size:.75rem">
+              <div style="padding:5px 8px;background:var(--surface2);border-radius:6px">
+                <div style="color:var(--muted);margin-bottom:1px">Priority Score</div>
+                <strong>${(p.priority_score*10).toFixed(1)}/10</strong>
+              </div>
+              <div style="padding:5px 8px;background:var(--surface2);border-radius:6px">
+                <div style="color:var(--muted);margin-bottom:1px">AI Confidence</div>
+                <strong style="color:#2e7d32">${a.aiConfidence}%</strong>
+              </div>
+              <div style="padding:5px 8px;background:var(--surface2);border-radius:6px">
+                <div style="color:var(--muted);margin-bottom:1px">GPS Distance</div>
+                <strong>${a.geoDistanceKm ? a.geoDistanceKm.toFixed(2)+' km' : '—'}</strong>
+              </div>
+            </div>
+            ${a.aiReasoning ? `<div style="font-size:.78rem;color:var(--text-secondary);line-height:1.5;
+                               background:#f9fbe7;border-left:3px solid #aed581;padding:8px 10px;border-radius:0 6px 6px 0">
+              ${a.aiReasoning}
+            </div>` : ''}
+            ${a.notes ? `<div style="font-size:.74rem;color:var(--muted);margin-top:6px">📝 ${a.notes}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Auto-expand when first project is archived
+  if (n === 1) {
+    archivedOpen = true;
+    list.style.display = '';
+    const ch = document.getElementById('archived-chevron');
+    if (ch) ch.style.transform = 'rotate(180deg)';
+  }
+}
+
+function toggleArchived() {
+  archivedOpen = !archivedOpen;
+  const list = document.getElementById('archived-list');
+  const ch   = document.getElementById('archived-chevron');
+  if (list) list.style.display = archivedOpen ? '' : 'none';
+  if (ch)   ch.style.transform = archivedOpen ? 'rotate(180deg)' : '';
 }
 </script>
 </body>
