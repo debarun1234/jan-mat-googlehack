@@ -63,7 +63,7 @@ flowchart TD
         CR[Cloud Run · FastAPI\nasia-south1]
         STT[Cloud Speech-to-Text\nIndic Languages]
         TRANS[Translation API\nHindi · Kannada · Tamil · Telugu]
-        GEM1[Gemini 2.5 Flash Lite\nStructured JSON Extraction]
+        GEM1[Gemini 3.1 Flash Lite\nStructured JSON Extraction]
         GCS[Cloud Storage\nAudio · Images]
         FS[(Firestore\nUser Profiles · Submission Tracking)]
     end
@@ -85,7 +85,7 @@ flowchart TD
     end
 
     subgraph AI["Phase 3 · Evidence + Dashboard API"]
-        GEM2[Gemini 2.5 Flash Lite\ngenerate_project_analysis\nTitle + Evidence in one call]
+        GEM2[Gemini 3.1 Flash Lite\ngenerate_project_analysis\nTitle + Evidence in one call]
         GATHER[asyncio.gather\nParallel BQ queries per project]
         CACHE[10-min server-side cache\nprojects list]
     end
@@ -236,7 +236,7 @@ The marker mode renders individual complaint pins clustered via `@googlemaps/mar
 | MP Dashboard | Node.js · Express | Web executive interface |
 | Backend API | FastAPI (Python 3.12) | Core orchestration — all three phases |
 | Deployment | Cloud Run · asia-south1 | Serverless, scales to zero |
-| AI / LLM | Gemini 2.5 Flash Lite (Vertex AI) | Structured extraction + Evidence Log (single combined call) |
+| AI / LLM | Gemini 3.1 Flash Lite (Vertex AI) | Structured extraction + Evidence Log (single combined call) |
 | Speech | Cloud Speech-to-Text | Indic language voice transcription |
 | Translation | Cloud Translation API | Multilingual normalization |
 | Analytics DB | BigQuery | Spatial clustering, priority scoring, CTE deduplication |
@@ -497,7 +497,7 @@ Built to run within **$300 GCP free credits** for the POC:
 - Cloud Run scales to zero when idle → **~$0–3/month**
 - BigQuery free tier covers POC query volume → **$0**
 - Firestore free tier (1GB storage, 50K reads/day) → **$0**
-- Gemini 2.5 Flash Lite — lowest-cost production Gemini model
+- Gemini 3.1 Flash Lite — lowest-cost production Gemini model
 - Cloud Storage minimal usage for POC media → **< $1/month**
 - **Total estimated: $5–15/month**
 
