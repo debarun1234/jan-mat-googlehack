@@ -146,13 +146,20 @@ class _Logo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(children: [
       Container(
-        width: 80, height: 80,
+        width: 96, height: 96,
         decoration: BoxDecoration(
-          gradient: JanMatTheme.heroGradient,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [BoxShadow(color: JanMatTheme.primary.withValues(alpha: 0.3), blurRadius: 24, spreadRadius: 2)],
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [BoxShadow(color: JanMatTheme.primary.withValues(alpha: 0.35), blurRadius: 28, spreadRadius: 2)],
         ),
-        child: const Icon(Icons.account_balance, color: Colors.white, size: 40),
+        padding: const EdgeInsets.all(10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.asset(
+            'assets/citizen_logo.jpeg',
+            fit: BoxFit.contain,
+          ),
+        ),
       ),
       const SizedBox(height: 16),
       const Text('JanMat', style: TextStyle(color: JanMatTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1.5)),

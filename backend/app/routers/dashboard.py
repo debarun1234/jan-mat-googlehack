@@ -13,6 +13,7 @@ Endpoints:
 
 import asyncio
 import base64
+import calendar
 import math
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -633,6 +634,114 @@ async def submit_project_completion(
         "ai_reasoning": ai_result.reasoning,
         "ai_issues": ai_result.issues,
         "evidence_gcs_uri": evidence_gcs_uri if overall else None,
+    }
+
+
+# ── Budget Tracker ────────────────────────────────────────────────────
+
+
+@router.get("/budget")
+async def get_budget(
+    mp: Annotated[dict, Depends(_get_current_mp)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    bq: Annotated[BigQueryService, Depends(get_bigquery_service)],
+    gcs: Annotated[StorageService, Depends(get_storage_service)],
+):
+    """
+    Real-time GCP cost breakdown for the budget tracker card.
+
+    Sources (all live):
+      - BigQuery INFORMATION_SCHEMA.JOBS_BY_PROJECT  → actual bytes processed → BQ cost
+      - GCS bucket list_blobs                        → actual storage bytes   → GCS cost
+      - citizen_grievances COUNT                     → Gemini / STT call est.
+      - Cloud SQL f1-micro asia-south1               → fixed known monthly cost
+    """
+    TOTAL_BUDGET = 300.0
+
+    # Pricing constants (asia-south1, as of 2025)
+    BQ_PRICE_PER_TB = 6.25         # on-demand; first 1 TB/month free
+    BQ_FREE_TB      = 1.0
+    GCS_PRICE_PER_GB = 0.020        # standard storage / GB / month
+    CLOUD_SQL_MONTHLY = 7.65        # db-f1-micro fixed (730 hrs × $0.0105)
+    CLOUD_RUN_PER_REQ = 0.00000040  # rough: 200ms × 256MB × 0.25vCPU
+    # Gemini 2.5-flash-lite on AI Studio free tier → $0
+    # If Vertex: ~$0.0001 per call; we show $0 and note free tier
+    GEMINI_PER_CALL   = 0.0
+
+    # ── Fetch real metrics in parallel ──────────────────────────────
+    bq_task  = bq.get_usage_stats(region="asia-south1")
+    gcs_task = gcs.get_bucket_usage()
+    bq_usage, gcs_usage = await asyncio.gather(bq_task, gcs_task, return_exceptions=True)
+
+    if isinstance(bq_usage, Exception):
+        log.warning("budget_bq_usage_failed", error=str(bq_usage))
+        bq_usage = {}
+    if isinstance(gcs_usage, Exception):
+        log.warning("budget_gcs_usage_failed", error=str(gcs_usage))
+        gcs_usage = {}
+
+    # ── Calculate costs ─────────────────────────────────────────────
+    bq_bytes     = bq_usage.get("bq_bytes_processed", 0)
+    bq_tb        = bq_bytes / 1e12
+    bq_cost      = max(0.0, (bq_tb - BQ_FREE_TB)) * BQ_PRICE_PER_TB
+
+    gcs_bytes    = gcs_usage.get("total_bytes", 0)
+    gcs_gb       = gcs_bytes / 1e9
+    gcs_cost     = gcs_gb * GCS_PRICE_PER_GB
+
+    total_subs   = bq_usage.get("total_submissions", 0)
+    cloud_run_cost = total_subs * CLOUD_RUN_PER_REQ
+    gemini_cost    = total_subs * GEMINI_PER_CALL
+
+    # Cloud SQL: prorate for days elapsed this month
+    now = datetime.now(timezone.utc)
+    days_in_month  = calendar.monthrange(now.year, now.month)[1]
+    days_elapsed   = now.day
+    cloud_sql_cost = CLOUD_SQL_MONTHLY * (days_elapsed / days_in_month)
+
+    total_spent = bq_cost + cloud_sql_cost + gcs_cost + cloud_run_cost + gemini_cost
+    remaining   = max(0.0, TOTAL_BUDGET - total_spent)
+
+    # Monthly burn rate (annualise from days elapsed)
+    if days_elapsed > 0:
+        monthly_rate = (total_spent / days_elapsed) * days_in_month
+    else:
+        monthly_rate = CLOUD_SQL_MONTHLY  # fallback: at minimum SQL cost
+    runway_months = (remaining / monthly_rate) if monthly_rate > 0 else 999.0
+
+    log.info(
+        "budget_calculated",
+        total_spent=round(total_spent, 2),
+        bq_tb=round(bq_tb, 6),
+        gcs_gb=round(gcs_gb, 3),
+        total_subs=total_subs,
+    )
+
+    return {
+        "total_budget":    TOTAL_BUDGET,
+        "total_spent":     round(total_spent, 2),
+        "remaining":       round(remaining, 2),
+        "pct_used":        round(total_spent / TOTAL_BUDGET * 100, 2),
+        "monthly_rate":    round(monthly_rate, 2),
+        "runway_months":   round(runway_months, 1),
+        "breakdown": {
+            "cloud_sql":      round(cloud_sql_cost, 2),
+            "bigquery":       round(bq_cost, 4),
+            "cloud_storage":  round(gcs_cost, 4),
+            "cloud_run":      round(cloud_run_cost, 4),
+            "gemini_api":     round(gemini_cost, 2),
+            "gemini_note":    "AI Studio free tier" if GEMINI_PER_CALL == 0 else "Vertex AI",
+        },
+        "usage_metrics": {
+            "bq_tb_processed_month": round(bq_tb, 6),
+            "bq_job_count":          bq_usage.get("bq_job_count", 0),
+            "gcs_storage_gb":        round(gcs_gb, 3),
+            "gcs_object_count":      gcs_usage.get("total_objects", 0),
+            "total_submissions":     total_subs,
+            "audio_submissions":     bq_usage.get("audio_submissions", 0),
+            "image_submissions":     bq_usage.get("image_submissions", 0),
+        },
+        "as_of": now.isoformat(),
     }
 
 

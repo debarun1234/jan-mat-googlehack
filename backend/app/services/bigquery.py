@@ -831,6 +831,57 @@ class BigQueryService:
         return "SELECT 1"
 
 
+    async def get_usage_stats(self, region: str = "asia-south1") -> dict:
+        """
+        Return real GCP usage metrics for the budget tracker.
+
+        Queries:
+          - INFORMATION_SCHEMA.JOBS_BY_PROJECT  → bytes processed this month
+          - citizen_grievances count            → submission / Gemini API call count
+        """
+        # 1. BQ bytes processed this month
+        bq_sql = f"""
+        SELECT
+            COALESCE(SUM(total_bytes_processed), 0)      AS bytes_processed,
+            COUNT(*)                                      AS job_count,
+            COALESCE(SUM(total_slot_ms), 0)              AS slot_ms
+        FROM `region-{region}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        WHERE creation_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+          AND state = 'DONE'
+        """
+
+        # 2. Submission count (each = 1 Gemini + 1 Speech-to-Text call)
+        sub_sql = f"""
+        SELECT
+            COUNT(*) AS total,
+            COUNTIF(processing_status = 'processed')  AS processed,
+            COUNTIF(input_type = 'audio')             AS audio_count,
+            COUNTIF(input_type = 'image')             AS image_count,
+            COUNTIF(input_type = 'text')              AS text_count
+        FROM `{self._table(self._analytics_ds, "citizen_grievances")}`
+        """
+
+        bq_rows, sub_rows = await asyncio.gather(
+            self._run_query(bq_sql, bigquery.QueryJobConfig()),
+            self._run_query(sub_sql, bigquery.QueryJobConfig()),
+            return_exceptions=True,
+        )
+
+        bq_stats = bq_rows[0] if isinstance(bq_rows, list) and bq_rows else {}
+        sub_stats = sub_rows[0] if isinstance(sub_rows, list) and sub_rows else {}
+
+        return {
+            "bq_bytes_processed": int(bq_stats.get("bytes_processed") or 0),
+            "bq_job_count":       int(bq_stats.get("job_count") or 0),
+            "bq_slot_ms":         int(bq_stats.get("slot_ms") or 0),
+            "total_submissions":  int(sub_stats.get("total") or 0),
+            "processed_submissions": int(sub_stats.get("processed") or 0),
+            "audio_submissions":  int(sub_stats.get("audio_count") or 0),
+            "image_submissions":  int(sub_stats.get("image_count") or 0),
+            "text_submissions":   int(sub_stats.get("text_count") or 0),
+        }
+
+
 _bq_service: BigQueryService | None = None
 
 

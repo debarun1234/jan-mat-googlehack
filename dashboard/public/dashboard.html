@@ -839,18 +839,14 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
-  <!-- Cost estimator -->
+  <!-- Budget Tracker — live GCP usage -->
   <div class="card">
-    <div class="card-header"><div class="card-title">💰 Budget Tracker</div></div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$300</div><div class="db-metric-label">Total Budget</div></div>
-        <div class="db-metric"><div class="db-metric-value">$14</div><div class="db-metric-label">Est. Monthly</div></div>
-        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$286</div><div class="db-metric-label">Remaining</div></div>
-        <div class="db-metric"><div class="db-metric-value">21 mo</div><div class="db-metric-label">Budget Runway</div></div>
-      </div>
-      <div class="progress-bar" style="height:12px"><div class="progress-fill" style="width:4.7%;background:linear-gradient(90deg,#2e7d32,#4caf50)"></div></div>
-      <div style="font-size:.78rem;color:var(--muted);margin-top:6px">4.7% of $300 budget used · Cloud SQL $7 + Cloud Run $3 + APIs $4/month</div>
+    <div class="card-header">
+      <div class="card-title">💰 Budget Tracker</div>
+      <span id="budget-refresh-time" style="font-size:.7rem;color:var(--muted)"></span>
+    </div>
+    <div class="card-body" id="budget-body">
+      <div class="loading" style="font-size:.82rem">Loading GCP usage…</div>
     </div>
   </div>
 </div>
@@ -910,7 +906,7 @@ async function onPageLoad(name) {
   else if (name === 'heatmap' && map) refreshMapData();
   if (name === 'projects' && !projectsList.length) loadProjects();
   if (name === 'users') loadUsers();
-  if (name === 'database') loadDBStatus();
+  if (name === 'database') { loadDBStatus(); loadBudget(); }
   if (name === 'telemetry') { loadTelemetry(); loadHealthGrid(); }
   if (name === 'trends') loadTrendChart(30);
 }
@@ -1603,6 +1599,72 @@ function filterUsersTable() {
   renderUsersTable(filtered);
 }
 
+// ── Budget Tracker ─────────────────────────────────────────────────
+async function loadBudget() {
+  const body = document.getElementById('budget-body');
+  try {
+    const d = await fetch('/api/budget').then(r => r.json());
+    const pct   = Math.min(d.pct_used, 100);
+    const barColor = pct < 50 ? 'linear-gradient(90deg,#2e7d32,#4caf50)'
+                   : pct < 80 ? 'linear-gradient(90deg,#e65100,#ff9800)'
+                   :            'linear-gradient(90deg,#c62828,#ef5350)';
+    const spent  = d.total_spent.toFixed(2);
+    const remain = d.remaining.toFixed(2);
+    const runway = d.runway_months >= 99 ? '99+ mo' : d.runway_months.toFixed(1) + ' mo';
+    const monthly = d.monthly_rate < 0.01 ? '<$0.01' : '$' + d.monthly_rate.toFixed(2);
+
+    const b = d.breakdown || {};
+    const m = d.usage_metrics || {};
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+        <div class="db-metric"><div class="db-metric-value" style="color:#2e7d32">$${d.total_budget.toFixed(0)}</div><div class="db-metric-label">Total Budget</div></div>
+        <div class="db-metric"><div class="db-metric-value">${monthly}</div><div class="db-metric-label">Est. Monthly</div></div>
+        <div class="db-metric"><div class="db-metric-value" style="color:${pct<80?'#2e7d32':'#c62828'}">$${remain}</div><div class="db-metric-label">Remaining</div></div>
+        <div class="db-metric"><div class="db-metric-value">${runway}</div><div class="db-metric-label">Runway</div></div>
+      </div>
+      <div class="progress-bar" style="height:12px;margin-bottom:6px">
+        <div class="progress-fill" style="width:${pct}%;background:${barColor};transition:width .6s"></div>
+      </div>
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px">
+        ${pct.toFixed(1)}% of $${d.total_budget} used
+        · $${spent} total spend (month-to-date)
+      </div>
+      <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cost Breakdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem">
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>☁️ Cloud SQL</span><strong>$${b.cloud_sql}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>📊 BigQuery</span><strong>$${(+b.bigquery).toFixed(4)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>🗄️ Cloud Storage</span><strong>$${(+b.cloud_storage).toFixed(4)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <span>🚀 Cloud Run</span><strong>$${(+b.cloud_run).toFixed(4)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:6px;grid-column:span 2">
+          <span>🤖 Gemini API</span>
+          <strong style="color:#2e7d32">$0 <span style="font-weight:400;font-size:.7rem">(${b.gemini_note||'free tier'})</span></strong>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:.72rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
+        <span>📥 ${m.total_submissions || 0} submissions</span>
+        <span>🎙️ ${m.audio_submissions || 0} audio</span>
+        <span>📷 ${m.image_submissions || 0} images</span>
+        <span>📊 ${m.bq_job_count || 0} BQ jobs</span>
+        <span>💾 ${(+(m.gcs_storage_gb||0)).toFixed(3)} GB stored</span>
+        <span>🔍 ${(+(m.bq_tb_processed_month||0)*1000).toFixed(4)} GB processed</span>
+      </div>`;
+
+    const ts = document.getElementById('budget-refresh-time');
+    if(ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">Failed to load budget data: ${e.message}</div>`;
+  }
+}
+
 // ── DB Control ─────────────────────────────────────────────────────
 async function loadDBStatus() {
   try {
@@ -1856,16 +1918,32 @@ document.getElementById('completion-modal').addEventListener('click', function(e
 function handleImageUpload(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { notify('Image must be under 10 MB', 'error'); return; }
-  completionMime = file.type || 'image/jpeg';
+  if (file.size > 20 * 1024 * 1024) { notify('Image must be under 20 MB', 'error'); return; }
+
   const reader = new FileReader();
   reader.onload = function(e) {
-    completionImageB64 = e.target.result.split(',')[1];
-    const preview = document.getElementById('cm-img-preview');
-    preview.src = e.target.result;
-    preview.style.display = 'block';
-    document.getElementById('cm-upload-placeholder').style.display = 'none';
-    document.getElementById('cm-upload-zone').classList.add('has-img');
+    const img = new Image();
+    img.onload = function() {
+      // Compress: cap longest edge at 1600px, quality 0.82
+      const MAX = 1600;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      completionImageB64 = dataUrl.split(',')[1];
+      completionMime = 'image/jpeg';
+      const preview = document.getElementById('cm-img-preview');
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+      document.getElementById('cm-upload-placeholder').style.display = 'none';
+      document.getElementById('cm-upload-zone').classList.add('has-img');
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }

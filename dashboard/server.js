@@ -53,8 +53,8 @@ function decodeJwtPayload(token) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // cookie-session is used ONLY for the OAuth state (stored between /auth/google
@@ -347,6 +347,9 @@ app.get("/api/media/:submission_id", requireAuth, async (req, res) => {
   }
 });
 
+// ── Budget tracker ────────────────────────────────────────────────────
+apiRoute("get", "/api/budget", req => proxyGet(req, "/dashboard/budget"));
+
 // ── Project completion ────────────────────────────────────────────────
 // Accepts JSON body with base64 image + GPS; proxies to backend for
 // Gemini image verification + geolocation check.
@@ -371,6 +374,16 @@ app.get("/api/export/csv", requireAuth, async (req, res) => {
     res.setHeader("Content-Disposition", response.headers["content-disposition"] || "attachment; filename=priorities.csv");
     response.data.pipe(res);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Error handler — ensures body-parse failures return JSON, not HTML ─────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.type === "entity.too.large"
+    ? "Request body too large — resize the image before uploading"
+    : err.message || "Internal server error";
+  res.status(status).json({ error: message });
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────────
