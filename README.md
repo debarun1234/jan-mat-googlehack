@@ -1,5 +1,5 @@
 # JanMat — People's Priority Engine
-### AI for Constituency Development Planning · Google AI Hackathon Track 1
+### AI for Constituency Development Planning ·Build with AI: Code for Communities Track 1
 
 > *"Turn unstructured citizen voices into ranked, evidence-backed development projects an MP can act on — with zero bias and full transparency."*
 
@@ -258,6 +258,7 @@ The Flutter citizen app (`citizen-app/`) targets Android (iOS ready). Key featur
 - **Submission result card** (`ResultCard`) — after every submission, shows detected category, urgency rating (1–5), and Gemini-generated English summary.
 - **Home screen stats** — real counts from `/users/stats` endpoint: total submitted, processed, pending — pulled from Firestore `submission_count` and submissions subcollection.
 - **Submission history** — full history of own submissions with category and summary.
+- **Offline queue** (`OfflineQueueService`) — submissions saved to `SharedPreferences` when the device has no connectivity. Audio and image files are copied from the OS temp dir to the app documents directory for persistence across restarts. The queue is automatically flushed (retried) the next time any submission attempt succeeds or the user taps "Sync Now" on the home screen. Only genuine network errors trigger queuing — 4xx server errors surface as normal error messages.
 - **In-app update** — checks GitHub Releases API for newer APK. Downloads and triggers Android installer. Shows "Install started — restart app to complete" after install rather than looping back to "update available".
 - **Citizen logo** — branded app identity in the home screen hero header.
 
@@ -429,8 +430,9 @@ jan-mat-googlehack/
 │   │   ├── widgets/
 │   │   │   └── result_card.dart     # Post-submission result display
 │   │   └── services/
-│   │       ├── api_service.dart     # HTTP client + SubmissionResult class
-│   │       └── user_service.dart    # Profile, stats, heatmap
+│   │       ├── api_service.dart           # HTTP client + SubmissionResult class
+│   │       ├── offline_queue_service.dart # Store-and-forward queue for low/no connectivity
+│   │       └── user_service.dart          # Profile, stats, heatmap
 │   ├── assets/
 │   │   └── citizen_logo.jpeg        # App branding logo
 │   └── pubspec.yaml                 # version: 1.0.3+3
@@ -505,9 +507,9 @@ Built to run within **$300 GCP free credits** for the POC:
 |---|---|---|
 | **Technical Execution** | 25% | Gemini is a deterministic Pydantic-validated parser. Parallel async pipeline (asyncio.gather). CTE deduplication prevents dashboard corruption from multiple pipeline runs. Single combined Gemini call per project. End-to-end pipeline runs without human intervention. |
 | **Deployability & Scalability** | 25% | 100% serverless — Cloud Run scales to zero, BigQuery has no infra to manage, Pub/Sub handles burst traffic. MAPS_API_KEY injected as env var, not hardcoded. |
-| **Inclusivity & Accessibility** | 15% | Native Speech-to-Text + Translation pipeline. Citizens with no English literacy submit via voice in their language. Flutter app works on low-end Android devices. Firebase Phone OTP — no email required. |
+| **Inclusivity & Accessibility** | 15% | Native Speech-to-Text + Translation pipeline. Citizens with no English literacy submit via voice in their language. Flutter app works on low-end Android devices. Firebase Phone OTP — no email required. **Offline queue** — submissions stored locally on device when there is no signal and synced automatically when connectivity returns, addressing low-connectivity rural deployment. |
 | **Problem-Solution Fit** | 20% | Priority Score cross-references citizen demand with real Census and NFHS datasets. Rural infrastructure gaps are quantified, not assumed. Evidence Log eliminates subjective bias. Population normalization prevents urban volume bias. |
 
 ---
 
-*Built for Google AI Hackathon — Track 1: People's Priorities*
+*Built forBuild with AI: Code for Communities — Track 1: People's Priorities*

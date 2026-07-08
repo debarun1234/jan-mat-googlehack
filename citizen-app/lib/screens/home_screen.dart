@@ -4,6 +4,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
+import '../services/offline_queue_service.dart';
 import 'audio_screen.dart';
 import 'text_screen.dart';
 import 'image_screen.dart';
@@ -19,11 +20,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _stats;
   bool _loading = true;
+  int _pendingOffline = 0;
+  bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
     _loadStats();
+    _checkOfflineQueue();
   }
 
   Future<void> _loadStats() async {
@@ -35,6 +39,34 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() { _stats = data; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _checkOfflineQueue() async {
+    final count = await OfflineQueueService().pendingCount;
+    if (mounted) setState(() => _pendingOffline = count);
+  }
+
+  Future<void> _syncNow() async {
+    setState(() => _syncing = true);
+    final sent = await OfflineQueueService().retryPending();
+    await _checkOfflineQueue();
+    if (mounted) {
+      setState(() => _syncing = false);
+      if (sent > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✅ $sent submission${sent == 1 ? '' : 's'} synced successfully!'),
+          backgroundColor: JanMatTheme.accent,
+          duration: const Duration(seconds: 3),
+        ));
+        _loadStats();
+      } else if (_pendingOffline > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Still no connection — will retry automatically.'),
+          backgroundColor: Color(0xFF546E7A),
+          duration: Duration(seconds: 3),
+        ));
+      }
     }
   }
 
@@ -54,6 +86,42 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList(delegate: SliverChildListDelegate([
                 const SizedBox(height: 20),
+                // ── Offline queue banner ──────────────────────────────
+                if (_pendingOffline > 0)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7B2FF7).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF7B2FF7).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.cloud_off_rounded, color: Color(0xFF7B2FF7), size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(
+                        '$_pendingOffline submission${_pendingOffline == 1 ? '' : 's'} waiting to sync',
+                        style: const TextStyle(color: Color(0xFF7B2FF7), fontSize: 13, fontWeight: FontWeight.w600),
+                      )),
+                      if (_syncing)
+                        const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF7B2FF7)),
+                        )
+                      else
+                        GestureDetector(
+                          onTap: _syncNow,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7B2FF7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('Sync Now', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                    ]),
+                  ),
                 if (_loading)
                   const Center(child: CircularProgressIndicator(color: JanMatTheme.primary))
                 else ...[

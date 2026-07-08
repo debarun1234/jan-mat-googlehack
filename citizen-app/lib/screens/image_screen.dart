@@ -7,6 +7,7 @@ import '../main.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../services/offline_queue_service.dart';
 import '../widgets/result_card.dart';
 import 'heatmap_screen.dart';
 
@@ -48,6 +49,9 @@ class _ImageScreenState extends State<ImageScreen> {
     }
 
     final app = context.read<AppState>();
+    // Flush any previously queued submissions first (silent background retry)
+    OfflineQueueService().retryPending().ignore();
+
     try {
       final svc = ApiService();
       final res = await svc.submitImage(
@@ -62,6 +66,29 @@ class _ImageScreenState extends State<ImageScreen> {
         app.refreshProfile();
       }
     } on DioException catch (e) {
+      if (isNetworkError(e) && loc.lat != null && loc.lng != null) {
+        // No connectivity — save to offline queue
+        await OfflineQueueService().enqueueImage(
+          filePath: _image!.path,
+          caption: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          lat: loc.lat!,
+          lng: loc.lng!,
+          token: app.token,
+        );
+        if (mounted) {
+          setState(() { _submitting = false; });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Row(children: [
+              Icon(Icons.cloud_off_rounded, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text('No connection — saved offline. Will sync when you reconnect.')),
+            ]),
+            backgroundColor: Color(0xFF7B2FF7),
+            duration: Duration(seconds: 5),
+          ));
+        }
+        return;
+      }
       final detail = (e.response?.data as Map?)?['detail']?.toString()
           ?? e.message ?? 'Submission failed';
       debugPrint('[JanMat Image] ${e.response?.statusCode}: $detail');

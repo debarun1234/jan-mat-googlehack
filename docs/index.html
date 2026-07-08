@@ -246,7 +246,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
   <div class="hero-orb orb2"></div>
   <div class="hero-orb orb3"></div>
 
-  <div class="hero-badge">🏆 Google AI Hackathon 2025 · Track 1: People's Priorities</div>
+  <div class="hero-badge">🏆Build with AI: Code for Communities · Track 1: People's Priorities</div>
 
   <img src="citizen_logo.jpeg" alt="JanMat" class="hero-logo"
        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -397,6 +397,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
           <tr><td>Bias Protection</td><td>None (urban areas dominate)</td><td>Population-normalized per 1000 residents</td></tr>
           <tr><td>Accountability</td><td>Black box recommendation</td><td>Evidence Log cites exact data rows for every recommendation</td></tr>
           <tr><td>Input Types</td><td>Text form only</td><td>Voice note + Photo + Text in any Indian language</td></tr>
+          <tr><td>Connectivity</td><td>Requires internet to submit</td><td>Offline queue — saves locally, auto-syncs when signal returns</td></tr>
         </tbody>
       </table>
     </div>
@@ -490,6 +491,12 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
         <p>Checks GitHub Releases API for newer APK. Downloads and triggers Android installer. Shows "Install started — restart app to complete" after install. No Play Store dependency for POC.</p>
         <span class="feat-highlight">v1.0.3+3 current</span>
       </div>
+      <div class="feat-card citizen">
+        <div class="feat-card-icon">📶</div>
+        <h3>Works Offline</h3>
+        <p>Submissions saved locally to SharedPreferences when no connectivity is detected. Audio and image files are persisted to the app documents directory. Queue flushes automatically the moment connection returns — no data is ever lost in the field.</p>
+        <span class="feat-highlight">Low-connectivity design</span>
+      </div>
     </div>
   </div>
 </section>
@@ -542,6 +549,13 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
           <div class="step-body">
             <h4>Check Your Stats</h4>
             <p>Go home — your "Submitted" count increments in real time from Firestore. Every submission you make is tracked.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num citizen">6</div>
+          <div class="step-body">
+            <h4>Test Offline Mode</h4>
+            <p>Switch to airplane mode, submit a complaint — it saves locally with a purple "saved offline" snackbar. Re-enable Wi-Fi, tap <strong>Sync Now</strong> on the home screen, and the submission goes through. Zero data loss.</p>
           </div>
         </div>
       </div>
@@ -718,7 +732,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
 
     <div style="text-align:center;margin-top:40px;padding:32px;background:linear-gradient(135deg,#e8eaf6,#ede7f6);border-radius:20px" class="fade-up">
       <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:700;color:var(--primary);margin-bottom:8px">Team QuantumDuo</div>
-      <p style="color:var(--text-muted);font-size:.9rem;line-height:1.6;max-width:540px;margin:0 auto">Built end-to-end in under 72 hours for the Google AI Hackathon 2025. Every component is production-grade and deployed on GCP asia-south1.</p>
+      <p style="color:var(--text-muted);font-size:.9rem;line-height:1.6;max-width:540px;margin:0 auto">Built end-to-end in under 72 hours for theBuild with AI: Code for Communities. Every component is production-grade and deployed on GCP asia-south1.</p>
     </div>
   </div>
 </section>
@@ -726,7 +740,7 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
 <!-- FOOTER -->
 <footer>
   <div class="team-name">JanMat</div>
-  <p>People's Priority Engine · Google AI Hackathon 2025 · Track 1 · Team QuantumDuo</p>
+  <p>People's Priority Engine ·Build with AI: Code for Communities · Track 1 · Team QuantumDuo</p>
   <div class="footer-links">
     <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank">MP Dashboard</a>
     <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/download/v1.0.3/janmat-citizen-v1.0.3.apk">Download APK</a>

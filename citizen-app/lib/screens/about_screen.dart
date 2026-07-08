@@ -68,6 +68,13 @@ class AboutScreen extends StatelessWidget {
                 title: 'Live Demand Heatmap',
                 body: 'See aggregated issue hotspots across your constituency. Filter by category — roads, water, health, education, sanitation — to understand where demand is highest.',
               ),
+              const SizedBox(height: 10),
+              _CapabilityCard(
+                icon: Icons.cloud_off_rounded,
+                gradient: const LinearGradient(colors: [Color(0xFF546E7A), Color(0xFF7B2FF7)]),
+                title: 'Works Offline',
+                body: 'No internet? No problem. Submissions are saved locally when connectivity is unavailable and automatically synced to the backend the moment your connection returns — no data is ever lost.',
+              ),
 
               const SizedBox(height: 28),
 
@@ -130,7 +137,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   const Text('© 2025 JanMat. All rights reserved.', style: TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
                   const SizedBox(height: 4),
-                  const Text('Built for Google AI Hackathon — Track 1', style: TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
+                  const Text('Built forBuild with AI: Code for Communities — Track 1', style: TextStyle(color: JanMatTheme.textMuted, fontSize: 11)),
                 ]),
               ),
               const SizedBox(height: 32),
@@ -241,7 +248,7 @@ class _HowItWorksCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: JanMatTheme.cardBox(),
       child: Column(children: [
-        _Step(num: '1', color: JanMatTheme.primary,   icon: Icons.campaign_rounded,   title: 'Citizen Submits',  body: 'Voice, text, or photo — in any language, with GPS location.'),
+        _Step(num: '1', color: JanMatTheme.primary,   icon: Icons.campaign_rounded,   title: 'Citizen Submits',  body: 'Voice, text, or photo — in any language, with GPS location. Saved offline if no signal; syncs automatically when connection returns.'),
         _Connector(),
         _Step(num: '2', color: const Color(0xFF7B2FF7), icon: Icons.psychology_rounded, title: 'AI Processes',    body: 'Gemini extracts category, urgency, and structured data. Translated to English.'),
         _Connector(),
