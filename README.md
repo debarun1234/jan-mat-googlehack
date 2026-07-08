@@ -3,6 +3,8 @@
 
 > *"Turn unstructured citizen voices into ranked, evidence-backed development projects an MP can act on — with zero bias and full transparency."*
 
+**[▶ Watch Citizen App Demo](https://debarun1234.github.io/jan-mat-googlehack/#demo)** · **[Live Dashboard](https://janmat-dashboard-w2w3osjaua-el.a.run.app)** · **[Landing Page](https://debarun1234.github.io/jan-mat-googlehack/)**
+
 ---
 
 ## The Problem

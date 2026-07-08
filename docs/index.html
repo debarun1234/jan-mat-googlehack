@@ -217,6 +217,72 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
 /* ── ANIMATIONS ── */
 .fade-up{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
 .fade-up.visible{opacity:1;transform:translateY(0)}
+
+/* ── HIGHLIGHTS ── */
+#highlights{padding:0;background:var(--surface)}
+.highlight-strip{padding:80px 0;display:flex;align-items:center}
+.highlight-strip:nth-child(even){background:#fff}
+.highlight-strip:nth-child(odd){background:var(--surface)}
+.highlight-inner{max-width:1160px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center}
+.highlight-strip:nth-child(even) .highlight-inner{direction:rtl}
+.highlight-strip:nth-child(even) .highlight-inner > *{direction:ltr}
+.highlight-img-wrap{position:relative}
+.highlight-img-wrap img{width:100%;border-radius:20px;box-shadow:0 24px 80px rgba(26,35,126,.18);border:1px solid rgba(26,35,126,.08);transition:transform .4s ease}
+.highlight-img-wrap:hover img{transform:translateY(-6px);box-shadow:0 36px 100px rgba(26,35,126,.24)}
+.highlight-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:.72rem;font-weight:800;letter-spacing:.8px;text-transform:uppercase;margin-bottom:16px}
+.highlight-badge.mp{background:rgba(63,81,181,.12);color:#3949ab}
+.highlight-badge.citizen{background:rgba(0,188,212,.12);color:#00838f}
+.highlight-text h3{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.5rem,2.5vw,2.1rem);font-weight:700;line-height:1.2;color:var(--text-dark);margin-bottom:16px}
+.highlight-text p{font-size:.97rem;color:var(--text-muted);line-height:1.75;margin-bottom:20px}
+.highlight-pills{display:flex;flex-wrap:wrap;gap:8px}
+.highlight-pill{padding:5px 14px;border-radius:20px;font-size:.75rem;font-weight:600;background:#e8eaf6;color:#3949ab}
+@media(max-width:768px){
+  .highlight-inner{grid-template-columns:1fr;gap:32px}
+  .highlight-strip:nth-child(even) .highlight-inner{direction:ltr}
+}
+
+/* ── GALLERY ── */
+#gallery{padding:100px 0;background:#fff}
+.gallery-tabs{display:flex;gap:8px;margin:40px 0 32px;border-bottom:2px solid #e8eaf6;padding-bottom:0}
+.gtab{padding:12px 24px;border:none;background:transparent;font-weight:700;font-size:.9rem;color:var(--text-muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;border-radius:8px 8px 0 0}
+.gtab.active{color:var(--primary);border-bottom-color:var(--primary);background:#f0f4ff}
+.gtab:hover:not(.active){color:var(--primary-mid)}
+.gpanel{display:none}
+.gpanel.active{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.gpanel.citizen-panel{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.gitem{position:relative;border-radius:14px;overflow:hidden;cursor:zoom-in;box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(26,35,126,.07);aspect-ratio:16/9;background:#e8eaf6}
+.gpanel.citizen-panel .gitem{aspect-ratio:9/18}
+.gitem img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
+.gitem:hover img{transform:scale(1.04)}
+.gcaption{position:absolute;inset:0;background:linear-gradient(to top,rgba(13,27,110,.85) 0%,transparent 55%);opacity:0;transition:opacity .25s;display:flex;align-items:flex-end;padding:16px}
+.gitem:hover .gcaption{opacity:1}
+.gcaption span{color:#fff;font-size:.78rem;font-weight:600;line-height:1.4}
+
+/* ── LIGHTBOX ── */
+#lightbox{display:none;position:fixed;inset:0;background:rgba(5,10,40,.92);z-index:2000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)}
+#lightbox.open{display:flex}
+#lightbox img{max-width:90vw;max-height:90vh;border-radius:16px;box-shadow:0 32px 120px rgba(0,0,0,.6);object-fit:contain}
+#lb-close{position:fixed;top:20px;right:24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;transition:.2s}
+#lb-close:hover{background:rgba(255,255,255,.25)}
+#lb-caption{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:.85rem;background:rgba(13,27,110,.7);padding:8px 20px;border-radius:20px;white-space:nowrap}
+
+/* ── DEMO VIDEO ── */
+#demo{padding:100px 0;background:linear-gradient(180deg,#f5f6ff 0%,#fff 100%)}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:56px;align-items:start}
+.demo-card{display:flex;flex-direction:column;gap:16px}
+.demo-card-label{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;font-size:.75rem;font-weight:800;letter-spacing:.6px;text-transform:uppercase;align-self:flex-start}
+.demo-card-label.mp{background:rgba(63,81,181,.12);color:#3949ab}
+.demo-card-label.citizen{background:rgba(0,188,212,.12);color:#00838f}
+.demo-card h3{font-family:'Space Grotesk',sans-serif;font-size:1.1rem;font-weight:700;color:var(--text-dark);margin:0}
+.demo-card p{font-size:.88rem;color:var(--text-muted);line-height:1.7;margin:0}
+.demo-video-wrap{border-radius:18px;overflow:hidden;box-shadow:0 24px 80px rgba(26,35,126,.18);border:1px solid rgba(26,35,126,.10);background:#000}
+.demo-video-wrap video{width:100%;display:block}
+.demo-video-wrap.portrait{max-width:320px;margin:0 auto}
+@media(max-width:768px){.demo-grid{grid-template-columns:1fr}}
+.highlight-img-wrap video{width:100%;border-radius:20px;box-shadow:0 24px 80px rgba(26,35,126,.18);border:1px solid rgba(26,35,126,.08);display:block}
+.gitem video{width:100%;height:100%;object-fit:cover;display:block}
+.gitem.video-item{cursor:default;aspect-ratio:9/16}
+.gitem.video-item .gcaption{opacity:1;background:linear-gradient(to top,rgba(13,27,110,.8) 0%,transparent 45%)}
 </style>
 </head>
 <body>
@@ -232,7 +298,9 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
     </a>
     <ul class="nav-links">
       <li><a href="#why">Why JanMat</a></li>
+      <li><a href="#demo">▶ Demo</a></li>
       <li><a href="#features">Features</a></li>
+      <li><a href="#gallery">Gallery</a></li>
       <li><a href="#howto">Try It</a></li>
       <li><a href="#team">Team</a></li>
     </ul>
@@ -405,6 +473,134 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
   </div>
 </section>
 
+<!-- DEMO VIDEO -->
+<section id="demo">
+  <div class="container">
+    <div class="section-label fade-up">Live Demos</div>
+    <h2 class="section-title fade-up">Both sides of the system — <span class="gradient-text">in action.</span></h2>
+    <p class="section-sub fade-up">From a voice complaint in Hindi to a ranked project in the MP dashboard — watch the full loop in two minutes.</p>
+
+    <div class="demo-grid">
+
+      <!-- MP Dashboard -->
+      <div class="demo-card fade-up">
+        <span class="demo-card-label mp">🏛️ MP Dashboard</span>
+        <h3>Real-time constituency intelligence for decision-makers</h3>
+        <p>Watch ranked development projects, the demand heatmap, Gemini evidence logs, budget tracker, and multi-constituency switcher — all live.</p>
+        <div class="demo-video-wrap">
+          <video controls playsinline preload="none"
+                 poster="screenshots/mp/overview.png">
+            <source src="videos/MP_Dashboard_Demo.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+
+      <!-- Citizen App -->
+      <div class="demo-card fade-up">
+        <span class="demo-card-label citizen">📱 Citizen App</span>
+        <h3>Voice to structured data in under 10 seconds</h3>
+        <p>A resident records a complaint in Hindi. Gemini transcribes, categorises, rates urgency, and GPS-tags it — ready for the pipeline within seconds.</p>
+        <div class="demo-video-wrap portrait">
+          <video controls playsinline preload="metadata"
+                 poster="screenshots/citizen/voice.jpeg">
+            <source src="videos/Citizen_app_demo.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HIGHLIGHTS -->
+<section id="highlights">
+
+  <!-- Strip 1: Overview dashboard -->
+  <div class="highlight-strip">
+    <div class="highlight-inner">
+      <div class="highlight-img-wrap fade-up">
+        <img src="screenshots/mp/overview.png" alt="MP Constituency Overview Dashboard" loading="lazy">
+      </div>
+      <div class="highlight-text fade-up">
+        <span class="highlight-badge mp">🏛️ MP Dashboard</span>
+        <h3>Constituency intelligence,<br>at a glance.</h3>
+        <p>The Overview tab gives an MP a real-time pulse of their constituency — total complaints, geographic hotspot count, top-priority category, and average urgency rating, all from live BigQuery data. No guesswork, no manual collation.</p>
+        <div class="highlight-pills">
+          <span class="highlight-pill">Live BigQuery</span>
+          <span class="highlight-pill">KPI Dashboard</span>
+          <span class="highlight-pill">Category Breakdown</span>
+          <span class="highlight-pill">Priority Scores</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strip 2: Projects with Evidence Log -->
+  <div class="highlight-strip">
+    <div class="highlight-inner">
+      <div class="highlight-img-wrap fade-up">
+        <img src="screenshots/mp/projects.png" alt="Ranked Development Projects with Evidence Log" loading="lazy">
+      </div>
+      <div class="highlight-text fade-up">
+        <span class="highlight-badge mp">📋 Evidence Engine</span>
+        <h3>AI-ranked projects.<br>Not opinions — evidence.</h3>
+        <p>Every development project is ranked by Priority Score <strong>P = 0.6×Demand + 0.4×Gap Index</strong>. Each card includes a Gemini-generated Evidence Log citing the exact Census and NFHS data rows behind the recommendation. The MP can mark projects complete with AI-verified photo evidence.</p>
+        <div class="highlight-pills">
+          <span class="highlight-pill">Gemini Evidence Log</span>
+          <span class="highlight-pill">Population Normalized</span>
+          <span class="highlight-pill">Photo Verification</span>
+          <span class="highlight-pill">Export CSV</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strip 3: Heatmap -->
+  <div class="highlight-strip">
+    <div class="highlight-inner">
+      <div class="highlight-img-wrap fade-up">
+        <img src="screenshots/mp/heatmap.png" alt="Geographic Demand Heatmap on Google Maps" loading="lazy">
+      </div>
+      <div class="highlight-text fade-up">
+        <span class="highlight-badge mp">🗺️ Demand Heatmap</span>
+        <h3>See where the problems are.<br>Literally.</h3>
+        <p>Individual GPS-tagged complaints are plotted on Google Maps as colour-coded density circles — blue to red by complaint weight. Switch to marker mode for individual complaint details. Filter by category. Run Gemini cluster analysis for AI-written area summaries.</p>
+        <div class="highlight-pills">
+          <span class="highlight-pill">Google Maps API</span>
+          <span class="highlight-pill">GPS Clustering</span>
+          <span class="highlight-pill">Category Filters</span>
+          <span class="highlight-pill">Gemini Analysis</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strip 4: Citizen App Video -->
+  <div class="highlight-strip">
+    <div class="highlight-inner">
+      <div class="highlight-img-wrap fade-up" style="max-width:300px;margin:0 auto">
+        <video controls playsinline preload="metadata"
+               poster="screenshots/citizen/voice.jpeg"
+               style="border-radius:28px;box-shadow:0 24px 80px rgba(26,35,126,.22)">
+          <source src="videos/Citizen_app_demo.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="highlight-text fade-up">
+        <span class="highlight-badge citizen">📱 Citizen App</span>
+        <h3>Voice → data in<br>under 10 seconds.</h3>
+        <p>A rural resident opens the app, presses record, speaks in Hindi. In the time it takes to say a sentence, Cloud Speech-to-Text transcribes it, Gemini extracts category + urgency + GPS, and the structured complaint lands in BigQuery — visible to the MP within the next pipeline run.</p>
+        <div class="highlight-pills">
+          <span class="highlight-pill">6+ Indic Languages</span>
+          <span class="highlight-pill">Gemini Vision</span>
+          <span class="highlight-pill">Offline Queue</span>
+          <span class="highlight-pill">Instant Feedback</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
 <!-- FEATURES -->
 <section id="features">
   <div class="container">
@@ -513,6 +709,109 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
     </div>
   </div>
 </section>
+
+<!-- GALLERY -->
+<section id="gallery">
+  <div class="container">
+    <div class="section-label fade-up">Screenshots</div>
+    <h2 class="section-title fade-up">Everything you see is real.</h2>
+    <p class="section-sub fade-up">Live screenshots from the deployed system — no mockups, no staging data.</p>
+
+    <div class="gallery-tabs fade-up">
+      <button class="gtab active" onclick="switchGTab('mp',this)">🏛️ MP Dashboard</button>
+      <button class="gtab" onclick="switchGTab('citizen',this)">📱 Citizen App</button>
+    </div>
+
+    <!-- MP Dashboard panel -->
+    <div id="gpanel-mp" class="gpanel active">
+      <!-- Dashboard demo video — spans 2 columns -->
+      <div class="gitem video-item" style="grid-column:span 2;aspect-ratio:16/9">
+        <video controls playsinline preload="none"
+               poster="screenshots/mp/overview.png"
+               style="width:100%;height:100%;object-fit:cover;border-radius:14px">
+          <source src="videos/MP_Dashboard_Demo.mp4" type="video/mp4">
+        </video>
+        <div class="gcaption"><span>▶ Full Dashboard Demo — heatmap, projects, evidence logs, budget tracker</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/overview.png" alt="Constituency Overview" loading="lazy">
+        <div class="gcaption"><span>Constituency Overview — KPIs, charts, priority scores</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/projects.png" alt="Ranked Development Projects" loading="lazy">
+        <div class="gcaption"><span>Ranked Development Projects with AI Evidence Logs</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/heatmap.png" alt="Demand Heatmap" loading="lazy">
+        <div class="gcaption"><span>Geographic Demand Heatmap — individual GPS complaint points</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/telemetry.png" alt="Telemetry & Gemini Quality" loading="lazy">
+        <div class="gcaption"><span>Telemetry — 99.1% schema pass rate, multilingual success</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/trends.png" alt="Demand Trends" loading="lazy">
+        <div class="gcaption"><span>Category Trends, Weekly Rate &amp; Hourly Patterns</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/ai_verify.png" alt="AI Completion Verification" loading="lazy">
+        <div class="gcaption"><span>Gemini AI verifies project completion — 90% confidence, GPS matched</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/citizens.png" alt="Citizen Registry" loading="lazy">
+        <div class="gcaption"><span>Citizen Registry — registered users, city/state breakdown</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/mp/login.png" alt="MP Login" loading="lazy">
+        <div class="gcaption"><span>MP Secure Login — Google OAuth2, authorised MPs only</span></div>
+      </div>
+    </div>
+
+    <!-- Citizen App panel -->
+    <div id="gpanel-citizen" class="gpanel citizen-panel">
+      <!-- Demo video spans 2 columns -->
+      <div class="gitem video-item" style="grid-column:span 2;aspect-ratio:9/16;max-width:320px;margin:0 auto;width:100%">
+        <video controls playsinline preload="metadata"
+               poster="screenshots/citizen/voice.jpeg"
+               style="width:100%;height:100%;object-fit:cover;border-radius:14px">
+          <source src="videos/Citizen_app_demo.mp4" type="video/mp4">
+        </video>
+        <div class="gcaption"><span>▶ Full App Demo — voice, photo &amp; text submission end-to-end</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/welcome.jpeg" alt="Citizen Welcome" loading="lazy">
+        <div class="gcaption"><span>Voice of the People — phone OTP onboarding</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/home.jpeg" alt="Citizen Home" loading="lazy">
+        <div class="gcaption"><span>Home screen — submission stats and quick actions</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/voice.jpeg" alt="Voice Note" loading="lazy">
+        <div class="gcaption"><span>Voice Note — tap to record in Hindi, Kannada, Tamil and more</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/photo.jpeg" alt="Photo Evidence" loading="lazy">
+        <div class="gcaption"><span>Photo Evidence — capture or upload, Gemini extracts the issue</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/text.jpeg" alt="Text Submission" loading="lazy">
+        <div class="gcaption"><span>Text submission — multilingual, Gemini parses directly</span></div>
+      </div>
+      <div class="gitem" onclick="openLightbox(this)">
+        <img src="screenshots/citizen/reports.jpeg" alt="My Reports" loading="lazy">
+        <div class="gcaption"><span>My Reports — submission history and processing status</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox(event)">
+  <button id="lb-close" onclick="closeLightbox()">✕</button>
+  <img id="lb-img" src="" alt="">
+  <div id="lb-caption"></div>
+</div>
 
 <!-- HOW TO TEST -->
 <section id="howto">
@@ -770,13 +1069,37 @@ window.addEventListener('scroll', () => {
   nav.classList.toggle('scrolled', window.scrollY > 60);
 });
 
-// Tab switching
+// Feature tab switching
 function switchTab(id, btn) {
   document.querySelectorAll('.feat-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.feat-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('panel-' + id).classList.add('active');
 }
+
+// Gallery tab switching
+function switchGTab(id, btn) {
+  document.querySelectorAll('.gtab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.gpanel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('gpanel-' + id).classList.add('active');
+}
+
+// Lightbox
+function openLightbox(el) {
+  const img = el.querySelector('img');
+  const cap = el.querySelector('.gcaption span');
+  document.getElementById('lb-img').src = img.src;
+  document.getElementById('lb-caption').textContent = cap ? cap.textContent : '';
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById('lightbox') && e.target !== document.getElementById('lb-close')) return;
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox({target:document.getElementById('lightbox')}); });
 
 // Fade-up intersection observer
 const observer = new IntersectionObserver(entries => {

@@ -892,10 +892,33 @@ class BigQueryService:
         except Exception as exc:
             log.warning("bq_submission_count_failed", error=str(exc))
 
+        # ── 3. Dataset and table counts (BQ client enumeration) ────────
+        schema_stats: dict = {"dataset_count": 0, "table_count": 0}
+        try:
+            loop = asyncio.get_event_loop()
+            datasets = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: list(self._client.list_datasets())),
+                timeout=8.0,
+            )
+            tc = 0
+            for ds in datasets:
+                tables = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, lambda d=ds: list(self._client.list_tables(d.dataset_id))
+                    ),
+                    timeout=5.0,
+                )
+                tc += len(tables)
+            schema_stats = {"dataset_count": len(datasets), "table_count": tc}
+        except Exception as exc:
+            log.warning("bq_schema_count_failed", error=str(exc))
+
         return {
             "bq_bytes_processed":    int(bq_stats.get("bytes_processed") or 0),
             "bq_job_count":          int(bq_stats.get("job_count") or 0),
             "bq_bytes_available":    isinstance(bq_stats.get("bytes_processed"), (int, float)),
+            "bq_dataset_count":      schema_stats["dataset_count"],
+            "bq_table_count":        schema_stats["table_count"],
             "total_submissions":     int(sub_stats.get("total") or 0),
             "processed_submissions": int(sub_stats.get("processed") or 0),
             "audio_submissions":     int(sub_stats.get("audio_count") or 0),

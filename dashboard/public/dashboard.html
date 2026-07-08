@@ -453,7 +453,7 @@ tr:last-child td{border-bottom:none}
   </a>
 
   <div class="sidebar-footer">
-    <small>JanMat v2.0 · POC Build<br>Google AI Hackathon 2025</small>
+    <small>JanMat v1.0.4 · POC Build<br>Build with AI: Code for Communities</small>
   </div>
 </div>
 
@@ -825,10 +825,10 @@ tr:last-child td{border-bottom:none}
     <div class="card-header"><div class="card-title">📊 BigQuery Usage</div></div>
     <div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-        <div class="db-metric"><div class="db-metric-value">2</div><div class="db-metric-label">Datasets</div></div>
-        <div class="db-metric"><div class="db-metric-value">4</div><div class="db-metric-label">Tables</div></div>
-        <div class="db-metric"><div class="db-metric-value">0 TB</div><div class="db-metric-label">Queries / Month</div></div>
-        <div class="db-metric"><div class="db-metric-value">$0</div><div class="db-metric-label">BQ Cost</div></div>
+        <div class="db-metric"><div class="db-metric-value" id="bq-datasets">—</div><div class="db-metric-label">Datasets</div></div>
+        <div class="db-metric"><div class="db-metric-value" id="bq-tables">—</div><div class="db-metric-label">Tables</div></div>
+        <div class="db-metric"><div class="db-metric-value" id="bq-tb-month">—</div><div class="db-metric-label">Processed / Month</div></div>
+        <div class="db-metric"><div class="db-metric-value" id="bq-cost">—</div><div class="db-metric-label">BQ Cost</div></div>
       </div>
       <div style="margin-top:12px;font-size:.8rem;color:var(--muted)">
         ✅ Within BigQuery free tier (1TB/month). Partitioned + clustered tables minimize query cost.
@@ -1453,30 +1453,10 @@ function renderMarkers(pts) {
 
   activeMarkers = markers;
 
-  // Use MarkerClusterer if loaded, else plain markers
-  if (window.markerClusterer) {
-    markerClusterer = new window.markerClusterer.MarkerClusterer({map, markers,
-      renderer: {
-        render({count, position}) {
-          return new google.maps.Marker({
-            position,
-            label: {text: String(count), color:'#fff', fontSize:'11px', fontWeight:'700'},
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 18 + Math.min(count, 30) * 0.3,
-              fillColor: '#1a237e',
-              fillOpacity: 0.85,
-              strokeColor: '#fff',
-              strokeWeight: 2,
-            },
-            zIndex: google.maps.Marker.MAX_ZINDEX + count,
-          });
-        }
-      }
-    });
-  } else {
-    markers.forEach(m => m.setMap(map));
-  }
+  // Use individual markers (no clusterer) so click → InfoWindow always works.
+  // MarkerClusterer absorbs clicks on cluster icons and prevents InfoWindow from opening
+  // on small POC datasets where all points fall within one cluster at default zoom.
+  markers.forEach(m => m.setMap(map));
 }
 
 function clearMarkers() {
@@ -1620,6 +1600,9 @@ function setMapMode(mode) {
   document.getElementById('mode-btn-heat').classList.toggle('active',   mode === 'heat');
   document.getElementById('mode-btn-marker').classList.toggle('active', mode === 'marker');
   document.getElementById('map-legend').style.display = mode === 'marker' ? 'flex' : 'none';
+  // Force-clear the layer we're leaving so circles/markers never bleed through
+  if (mode === 'marker') clearHeatLayer();
+  else                   clearMarkers();
   applyMapFilter(activeCategory);
 }
 
@@ -1806,6 +1789,16 @@ async function loadBudget() {
 
     const ts = document.getElementById('budget-refresh-time');
     if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    // ── Populate BigQuery Usage card with real data ────────────────
+    const bqDs  = document.getElementById('bq-datasets');
+    const bqTbl = document.getElementById('bq-tables');
+    const bqTb  = document.getElementById('bq-tb-month');
+    const bqCst = document.getElementById('bq-cost');
+    if (bqDs)  bqDs.textContent  = m.bq_dataset_count || '—';
+    if (bqTbl) bqTbl.textContent = m.bq_table_count   || '—';
+    if (bqTb)  bqTb.textContent  = ((+(m.bq_tb_processed_month || 0)) * 1000).toFixed(4) + ' GB';
+    if (bqCst) bqCst.textContent = '$' + (+(d.breakdown?.bigquery || 0)).toFixed(4);
 
   } catch(renderErr) {
     body.innerHTML = `<div style="font-size:.8rem;color:var(--red)">Render error: ${renderErr.message}</div>`;

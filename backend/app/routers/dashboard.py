@@ -775,6 +775,8 @@ async def get_budget(
             "bq_tb_processed_month": round(bq_tb, 6),
             "bq_job_count":          int(bq_usage.get("bq_job_count") or 0),
             "bq_live":               bq_live,
+            "bq_dataset_count":      int(bq_usage.get("bq_dataset_count") or 0),
+            "bq_table_count":        int(bq_usage.get("bq_table_count") or 0),
             "gcs_storage_gb":        round(gcs_gb, 3),
             "gcs_object_count":      int(gcs_usage.get("total_objects") or 0),
             "gcs_live":              gcs_live,
