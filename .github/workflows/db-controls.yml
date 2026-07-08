@@ -2,19 +2,8 @@ name: DB Controls - Start / Stop
 
 on:
   schedule:
-    # 07:30 UTC = 1:00 PM IST — auto-start for the day
-    - cron: "30 7 * * *"
-  workflow_dispatch:
-    inputs:
-      action:
-        description: "Start or Stop Cloud SQL"
-        required: true
-        type: choice
-        options: [start, stop]
-      reason:
-        description: "Reason"
-        required: false
-        default: "Manual"
+    # 00:30 UTC = 6:00 AM IST — auto-start for the day
+    - cron: "30 0 * * *"
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -24,7 +13,7 @@ env:
 
 jobs:
   db-control:
-    name: Cloud SQL ${{ inputs.action || 'start (scheduled)' }}
+    name: Cloud SQL start 6 AM IST (scheduled)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,9 +29,8 @@ jobs:
 
       # ── Scheduled morning startup ──────────────────────────────────────
       - name: Morning startup (scheduled)
-        if: github.event_name == 'schedule'
         run: |
-          echo "=== Startup (1:00 PM IST) ==="
+          echo "=== Startup (6:00 AM IST) ==="
 
           # Start Cloud SQL
           STATE=$(gcloud sql instances describe $DB_INSTANCE \
@@ -71,28 +59,3 @@ jobs:
           gcloud sql instances describe $DB_INSTANCE \
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || true
 
-      # ── Manual start ──────────────────────────────────────────────────
-      - name: Manual start
-        if: github.event_name == 'workflow_dispatch' && inputs.action == 'start'
-        run: |
-          echo "Starting Cloud SQL (reason: ${{ inputs.reason }})..."
-          gcloud sql instances patch $DB_INSTANCE \
-            --project=$PROJECT_ID \
-            --activation-policy=ALWAYS \
-            --quiet
-          sleep 10
-          gcloud sql instances describe $DB_INSTANCE \
-            --project=$PROJECT_ID --format='value(state)'
-
-      # ── Manual stop ───────────────────────────────────────────────────
-      - name: Manual stop
-        if: github.event_name == 'workflow_dispatch' && inputs.action == 'stop'
-        run: |
-          echo "Stopping Cloud SQL (reason: ${{ inputs.reason }})..."
-          gcloud sql instances patch $DB_INSTANCE \
-            --project=$PROJECT_ID \
-            --activation-policy=NEVER \
-            --quiet
-          sleep 10
-          gcloud sql instances describe $DB_INSTANCE \
-            --project=$PROJECT_ID --format='value(state)'

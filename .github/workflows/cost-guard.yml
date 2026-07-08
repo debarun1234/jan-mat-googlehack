@@ -2,16 +2,8 @@ name: Cost Guard - Nightly Shutdown
 
 on:
   schedule:
-    # 18:00 UTC = 11:30 PM IST — stop everything
-    - cron: "0 18 * * *"
-  workflow_dispatch:
-    inputs:
-      action:
-        description: "Force action"
-        required: false
-        type: choice
-        options: [shutdown, status]
-        default: status
+    # 17:30 UTC = 11:00 PM IST — stop everything
+    - cron: "30 17 * * *"
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -21,12 +13,11 @@ env:
 
 jobs:
   nightly-shutdown:
-    name: Nightly Shutdown (11 PM IST)
+    name: Nightly Shutdown (11:00 PM IST)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -75,4 +66,4 @@ jobs:
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
           echo "Cloud SQL: $DB_STATE"
           echo "Cloud Run: min-instances=0 (scales to zero on no traffic)"
-          echo "Auto-restart scheduled: 1:00 PM IST (07:30 UTC)"
+          echo "Auto-restart scheduled: 6:00 AM IST (00:30 UTC)"

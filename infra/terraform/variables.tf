@@ -47,9 +47,9 @@ variable "db_stop_schedule" {
 }
 
 variable "db_start_schedule" {
-  description = "Cron schedule to START Cloud SQL (UTC). Default: 7:00 AM IST = 01:30 UTC"
+  description = "Cron schedule to START Cloud SQL (UTC). Default: 6:00 AM IST = 00:30 UTC"
   type        = string
-  default     = "30 1 * * *"
+  default     = "30 0 * * *"
 }
 
 variable "gemini_model" {
