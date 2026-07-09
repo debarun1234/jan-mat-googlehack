@@ -1,7 +1,7 @@
 name: janmat_citizen
 description: JanMat Citizen App — AI-driven constituency development platform.
 publish_to: 'none'
-version: 1.0.6+6
+version: 1.0.5+5
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
