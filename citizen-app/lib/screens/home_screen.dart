@@ -17,17 +17,29 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _stats;
   bool _loading = true;
-  int _pendingOffline = 0;
   bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadStats();
-    _checkOfflineQueue();
+    _autoSync(); // attempt flush on first load
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Auto-sync whenever app comes back to foreground (e.g. user re-enables WiFi then opens app)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _autoSync();
   }
 
   Future<void> _loadStats() async {
@@ -42,15 +54,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _checkOfflineQueue() async {
-    final count = await OfflineQueueService().pendingCount;
-    if (mounted) setState(() => _pendingOffline = count);
+  // Silent background flush — shows snackbar only on success
+  Future<void> _autoSync() async {
+    if (OfflineQueueService.pendingNotifier.value == 0) return;
+    final sent = await OfflineQueueService().retryPending();
+    if (sent > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✅ $sent submission${sent == 1 ? '' : 's'} synced!'),
+        backgroundColor: JanMatTheme.accent,
+        duration: const Duration(seconds: 3),
+      ));
+      _loadStats();
+    }
   }
 
   Future<void> _syncNow() async {
+    if (_syncing) return;
     setState(() => _syncing = true);
     final sent = await OfflineQueueService().retryPending();
-    await _checkOfflineQueue();
     if (mounted) {
       setState(() => _syncing = false);
       if (sent > 0) {
@@ -60,9 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
           duration: const Duration(seconds: 3),
         ));
         _loadStats();
-      } else if (_pendingOffline > 0) {
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Still no connection — will retry automatically.'),
+          content: Text('Still no connection — will retry automatically when you reconnect.'),
           backgroundColor: Color(0xFF546E7A),
           duration: Duration(seconds: 3),
         ));
@@ -87,41 +108,46 @@ class _HomeScreenState extends State<HomeScreen> {
               sliver: SliverList(delegate: SliverChildListDelegate([
                 const SizedBox(height: 20),
                 // ── Offline queue banner ──────────────────────────────
-                if (_pendingOffline > 0)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF7B2FF7).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF7B2FF7).withValues(alpha: 0.3)),
-                    ),
-                    child: Row(children: [
-                      const Icon(Icons.cloud_off_rounded, color: Color(0xFF7B2FF7), size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(
-                        '$_pendingOffline submission${_pendingOffline == 1 ? '' : 's'} waiting to sync',
-                        style: const TextStyle(color: Color(0xFF7B2FF7), fontSize: 13, fontWeight: FontWeight.w600),
-                      )),
-                      if (_syncing)
-                        const SizedBox(
-                          width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF7B2FF7)),
-                        )
-                      else
-                        GestureDetector(
-                          onTap: _syncNow,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF7B2FF7),
-                              borderRadius: BorderRadius.circular(8),
+                ValueListenableBuilder<int>(
+                  valueListenable: OfflineQueueService.pendingNotifier,
+                  builder: (_, count, __) {
+                    if (count == 0) return const SizedBox.shrink();
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7B2FF7).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF7B2FF7).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.cloud_off_rounded, color: Color(0xFF7B2FF7), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(
+                          '$count submission${count == 1 ? '' : 's'} waiting to sync',
+                          style: const TextStyle(color: Color(0xFF7B2FF7), fontSize: 13, fontWeight: FontWeight.w600),
+                        )),
+                        if (_syncing)
+                          const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF7B2FF7)),
+                          )
+                        else
+                          GestureDetector(
+                            onTap: _syncNow,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7B2FF7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Sync Now', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
                             ),
-                            child: const Text('Sync Now', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
                           ),
-                        ),
-                    ]),
-                  ),
+                      ]),
+                    );
+                  },
+                ),
                 if (_loading)
                   const Center(child: CircularProgressIndicator(color: JanMatTheme.primary))
                 else ...[

@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme.dart';
+import 'services/notification_service.dart';
+import 'services/offline_queue_service.dart';
 import 'services/user_service.dart';
 import 'screens/shell_screen.dart';
 import 'screens/auth/phone_screen.dart';
@@ -18,6 +20,8 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase init failed: $e');
   }
+  await OfflineQueueService().init();   // load persisted queue count into notifier
+  await NotificationService().init();  // set up local notification channel
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,

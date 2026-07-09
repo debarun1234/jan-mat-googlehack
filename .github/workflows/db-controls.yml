@@ -1,9 +1,10 @@
 name: DB Controls - Start / Stop
 
+# Schedule is managed by Cloud Scheduler (janmat-start-db, Asia/Kolkata TZ).
+# GitHub Actions schedule triggers are unreliable (1-4 hr drift) — removed.
+# This workflow is kept as a manual fallback only.
 on:
-  schedule:
-    # 00:30 UTC = 6:00 AM IST — auto-start for the day
-    - cron: "30 0 * * *"
+  workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

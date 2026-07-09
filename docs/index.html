@@ -336,13 +336,25 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
     <a href="https://janmat-dashboard-w2w3osjaua-el.a.run.app" target="_blank" class="btn btn-teal">
       🏛️ Open MP Dashboard
     </a>
-    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/download/v1.0.3/janmat-citizen-v1.0.3.apk" class="btn btn-orange">
+    <a href="https://github.com/debarun1234/jan-mat-googlehack/releases/latest" target="_blank" class="btn btn-orange">
       📱 Download Citizen App
     </a>
     <a href="https://github.com/debarun1234/jan-mat-googlehack" target="_blank" class="btn btn-glass">
       <svg width="18" height="18" fill="#fff" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
       View Source
     </a>
+  </div>
+
+  <!-- Patch notice -->
+  <div style="margin:14px auto 0;max-width:520px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:10px 16px;display:flex;align-items:flex-start;gap:10px;text-align:left;">
+    <span style="font-size:1.1rem;margin-top:1px">🔔</span>
+    <p style="margin:0;font-size:0.78rem;color:rgba(255,255,255,0.75);line-height:1.55">
+      <strong style="color:#fff">APK updated with bug fixes after initial submission.</strong>
+      Download the latest APK above. If you already installed an earlier version,
+      open the app → tap your <strong style="color:#fff">profile icon (top-right)</strong>
+      → <strong style="color:#fff">About JanMat</strong> → scroll down to <em>App Update</em>
+      → tap <em>Check for Update</em> to get the latest patch automatically.
+    </p>
   </div>
 
   <div class="hero-stats">
@@ -712,13 +724,13 @@ nav.scrolled{background:rgba(13,27,110,.92);backdrop-filter:blur(20px);box-shado
         <div class="feat-card-icon">🔄</div>
         <h3>In-App Updates</h3>
         <p>Checks GitHub Releases API for newer APK. Downloads and triggers Android installer. Shows "Install started — restart app to complete" after install. No Play Store dependency for POC.</p>
-        <span class="feat-highlight">v1.0.3+3 current</span>
+        <span class="feat-highlight">v1.0.6+6 — profile icon → About JanMat → Check for Update</span>
       </div>
       <div class="feat-card citizen">
         <div class="feat-card-icon">📶</div>
         <h3>Works Offline</h3>
-        <p>Submissions saved locally to SharedPreferences when no connectivity is detected. Audio and image files are persisted to the app documents directory. Queue flushes automatically the moment connection returns — no data is ever lost in the field.</p>
-        <span class="feat-highlight">Low-connectivity design</span>
+        <p>Submissions saved locally to SharedPreferences when no connectivity is detected. Audio and image files are persisted to the app documents directory. Queue flushes automatically the moment connection returns — and a phone notification confirms each successful sync. No data is ever lost in the field.</p>
+        <span class="feat-highlight">Low-connectivity + sync notification</span>
       </div>
     </div>
   </div>

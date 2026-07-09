@@ -39,17 +39,17 @@ variable "db_user" {
   default     = "janmat_user"
 }
 
-# Kill/restart schedule (IST = UTC+5:30)
+# Kill/restart schedule — time_zone = "Asia/Kolkata" so crons are in IST directly
 variable "db_stop_schedule" {
-  description = "Cron schedule to STOP Cloud SQL (UTC). Default: 11:00 PM IST = 17:30 UTC"
+  description = "Cron schedule to STOP Cloud SQL (IST). Default: 11:00 PM IST"
   type        = string
-  default     = "30 17 * * *"
+  default     = "0 23 * * *"
 }
 
 variable "db_start_schedule" {
-  description = "Cron schedule to START Cloud SQL (UTC). Default: 6:00 AM IST = 00:30 UTC"
+  description = "Cron schedule to START Cloud SQL (IST). Default: 6:00 AM IST"
   type        = string
-  default     = "30 0 * * *"
+  default     = "0 6 * * *"
 }
 
 variable "gemini_model" {

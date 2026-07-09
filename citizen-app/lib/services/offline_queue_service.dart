@@ -14,11 +14,13 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api_service.dart';
+import 'notification_service.dart';
 import 'package:dio/dio.dart';
 
 const _kPrefKey = 'janmat_offline_queue_v1';
@@ -78,6 +80,17 @@ class OfflineQueueService {
   factory OfflineQueueService() => _instance;
   OfflineQueueService._();
 
+  /// Reactive count — listen to this instead of polling pendingCount.
+  /// Updated immediately whenever items are enqueued or sent.
+  static final ValueNotifier<int> pendingNotifier = ValueNotifier(0);
+
+  /// Call once in main() after WidgetsFlutterBinding.ensureInitialized()
+  /// to pre-load the count from storage into the notifier.
+  Future<void> init() async {
+    final q = await getQueue();
+    pendingNotifier.value = q.length;
+  }
+
   // ── Queue persistence ─────────────────────────────────────────────────
 
   Future<List<QueuedSubmission>> getQueue() async {
@@ -99,6 +112,7 @@ class OfflineQueueService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _kPrefKey, jsonEncode(queue.map((e) => e.toJson()).toList()));
+    pendingNotifier.value = queue.length; // keep notifier in sync
   }
 
   Future<int> get pendingCount async => (await getQueue()).length;
@@ -240,6 +254,12 @@ class OfflineQueueService {
     }
 
     await _saveQueue(remaining);
+
+    // Fire a phone notification for every automatic background sync
+    if (sent > 0) {
+      await NotificationService().showSyncSuccess(sent);
+    }
+
     return sent;
   }
 

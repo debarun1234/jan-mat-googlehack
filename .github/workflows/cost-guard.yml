@@ -1,9 +1,10 @@
 name: Cost Guard - Nightly Shutdown
 
+# Schedule is managed by Cloud Scheduler (janmat-stop-db, Asia/Kolkata TZ).
+# GitHub Actions schedule triggers are unreliable (1-4 hr drift) — removed.
+# This workflow is kept as a manual fallback only.
 on:
-  schedule:
-    # 17:30 UTC = 11:00 PM IST — stop everything
-    - cron: "30 17 * * *"
+  workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

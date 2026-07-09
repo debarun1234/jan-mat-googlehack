@@ -5,9 +5,9 @@
 #   NEVER  = stopped (no compute cost)
 #   ALWAYS = running
 #
-# IST = UTC+5:30
-# Stop  at 11:00 PM IST = 17:30 UTC  →  "30 17 * * *"
-# Start at  6:00 AM IST = 00:30 UTC  →  "30 0  * * *"
+# time_zone = "Asia/Kolkata" — cron values are in IST directly (NOT UTC)
+# Stop  at 11:00 PM IST  →  "0 23 * * *"
+# Start at  6:00 AM IST  →  "0 6  * * *"
 # Downtime window: 11 PM – 6 AM IST (7 hours)
 # ─────────────────────────────────────────
 
@@ -15,7 +15,7 @@
 resource "google_cloud_scheduler_job" "stop_db" {
   name             = "janmat-stop-db"
   description      = "Stop Cloud SQL to save credits overnight"
-  schedule         = var.db_stop_schedule # "30 17 * * *" (UTC)
+  schedule         = var.db_stop_schedule # "0 23 * * *" (IST — time_zone=Asia/Kolkata)
   time_zone        = "Asia/Kolkata"
   attempt_deadline = "30s"
 
@@ -50,7 +50,7 @@ resource "google_cloud_scheduler_job" "stop_db" {
 resource "google_cloud_scheduler_job" "start_db" {
   name             = "janmat-start-db"
   description      = "Start Cloud SQL in the morning"
-  schedule         = var.db_start_schedule # "30 0 * * *" (UTC)
+  schedule         = var.db_start_schedule # "0 6 * * *" (IST — time_zone=Asia/Kolkata)
   time_zone        = "Asia/Kolkata"
   attempt_deadline = "30s"
 
