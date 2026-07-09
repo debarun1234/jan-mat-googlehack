@@ -1,20 +1,21 @@
-name: DB Controls - Start / Stop
+name: Cost Guard - Morning Startup
 
-# Schedule is managed by Cloud Scheduler (janmat-start-db, Asia/Kolkata TZ).
-# GitHub Actions schedule triggers are unreliable (1-4 hr drift) — removed.
-# This workflow is kept as a manual fallback only.
+# Startup at 6:00 AM IST (Asia/Kolkata)
+# Starts Cloud SQL + verifies all Cloud Run services are live.
+# Cloud Run auto-scales on first request (min-instances=0 is sufficient).
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+      timezone: 'Asia/Kolkata'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   DB_INSTANCE: janmat-db-poc
-  CLOUD_RUN_SERVICE: janmat-backend
   REGION: asia-south1
 
 jobs:
-  db-control:
-    name: Cloud SQL start 6 AM IST (scheduled)
+  morning-startup:
+    name: Morning Startup (6:00 AM IST Asia/Kolkata)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,35 +29,38 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # ── Scheduled morning startup ──────────────────────────────────────
-      - name: Morning startup (scheduled)
+      - name: Start Cloud SQL
         run: |
-          echo "=== Startup (6:00 AM IST) ==="
-
-          # Start Cloud SQL
           STATE=$(gcloud sql instances describe $DB_INSTANCE \
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
+          echo "Cloud SQL state: $STATE"
           if [ "$STATE" != "RUNNABLE" ]; then
-            echo "Starting Cloud SQL..."
             gcloud sql instances patch $DB_INSTANCE \
-              --project=$PROJECT_ID \
-              --activation-policy=ALWAYS \
-              --quiet
-            echo "✅ Cloud SQL starting (takes ~60s to be ready)"
+              --project=$PROJECT_ID --activation-policy=ALWAYS --quiet
+            echo "Cloud SQL starting"
           else
-            echo "ℹ️  Cloud SQL already running"
+            echo "Cloud SQL already running"
           fi
 
-          # Ensure Cloud Run min-instances back to 0 (auto-scales up on traffic)
-          gcloud run services update $CLOUD_RUN_SERVICE \
-            --project=$PROJECT_ID \
-            --region=$REGION \
-            --min-instances=0 \
-            --quiet 2>/dev/null && echo "✅ Cloud Run ready (scales on traffic)" \
-            || echo "ℹ️  Cloud Run service not yet deployed (skip)"
+      - name: Verify Cloud Run services
+        run: |
+          for svc in janmat-backend janmat-dashboard janmat-etl; do
+            URL=$(gcloud run services describe $svc \
+              --project=$PROJECT_ID --region=$REGION \
+              --format='value(status.url)' 2>/dev/null || echo "")
+            if [ -n "$URL" ]; then
+              echo "$svc live: $URL"
+            else
+              echo "$svc not found or not deployed"
+            fi
+          done
 
-          sleep 15
-          echo "=== Status ==="
-          gcloud sql instances describe $DB_INSTANCE \
-            --project=$PROJECT_ID --format='value(state)' 2>/dev/null || true
-
+      - name: Confirm Cloud SQL ready
+        run: |
+          sleep 30
+          echo "Time (IST): $(TZ='Asia/Kolkata' date)"
+          STATE=$(gcloud sql instances describe $DB_INSTANCE \
+            --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
+          echo "Cloud SQL: $STATE"
+          echo "System live. Cloud Run scales up on traffic."
+          echo "Next shutdown: 11:00 PM IST (Asia/Kolkata)"

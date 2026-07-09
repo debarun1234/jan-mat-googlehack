@@ -1,20 +1,21 @@
 name: Cost Guard - Nightly Shutdown
 
-# Schedule is managed by Cloud Scheduler (janmat-stop-db, Asia/Kolkata TZ).
-# GitHub Actions schedule triggers are unreliable (1-4 hr drift) — removed.
-# This workflow is kept as a manual fallback only.
+# Shutdown at 11:00 PM IST (Asia/Kolkata)
+# Stops Cloud SQL + scales all Cloud Run services to min-instances=0
+# so no idle compute or network egress charges overnight.
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 23 * * *'
+      timezone: 'Asia/Kolkata'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   DB_INSTANCE: janmat-db-poc
-  CLOUD_RUN_SERVICE: janmat-backend
   REGION: asia-south1
 
 jobs:
   nightly-shutdown:
-    name: Nightly Shutdown (11:00 PM IST)
+    name: Nightly Shutdown (11:00 PM IST Asia/Kolkata)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,41 +31,43 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # ── 1. Stop Cloud SQL ──────────────────────────────────────────────
       - name: Stop Cloud SQL
         run: |
           STATE=$(gcloud sql instances describe $DB_INSTANCE \
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
-          echo "Current state: $STATE"
+          echo "Cloud SQL state: $STATE"
           if [ "$STATE" = "RUNNABLE" ]; then
-            echo "Stopping Cloud SQL..."
             gcloud sql instances patch $DB_INSTANCE \
-              --project=$PROJECT_ID \
-              --activation-policy=NEVER \
-              --quiet
-            echo "✅ Cloud SQL stopped"
+              --project=$PROJECT_ID --activation-policy=NEVER --quiet
+            echo "Cloud SQL stopped"
           else
-            echo "ℹ️  Cloud SQL already stopped (state=$STATE)"
+            echo "Cloud SQL already stopped"
           fi
 
-      # ── 2. Scale Cloud Run to 0 ────────────────────────────────────────
-      - name: Scale Cloud Run to zero
+      - name: Scale janmat-backend to zero
         run: |
-          gcloud run services update $CLOUD_RUN_SERVICE \
-            --project=$PROJECT_ID \
-            --region=$REGION \
-            --min-instances=0 \
-            --quiet 2>/dev/null && echo "✅ Cloud Run min-instances=0" \
-            || echo "ℹ️  Cloud Run service not found or already at 0 (skip)"
+          gcloud run services update janmat-backend \
+            --project=$PROJECT_ID --region=$REGION --min-instances=0 --quiet 2>/dev/null \
+            && echo "janmat-backend min-instances=0" || echo "janmat-backend not found (skip)"
 
-      # ── 3. Summary ────────────────────────────────────────────────────
+      - name: Scale janmat-dashboard to zero
+        run: |
+          gcloud run services update janmat-dashboard \
+            --project=$PROJECT_ID --region=$REGION --min-instances=0 --quiet 2>/dev/null \
+            && echo "janmat-dashboard min-instances=0" || echo "janmat-dashboard not found (skip)"
+
+      - name: Scale janmat-etl to zero
+        run: |
+          gcloud run services update janmat-etl \
+            --project=$PROJECT_ID --region=$REGION --min-instances=0 --quiet 2>/dev/null \
+            && echo "janmat-etl min-instances=0" || echo "janmat-etl not found (skip)"
+
       - name: Shutdown summary
         run: |
-          echo "=== Nightly Shutdown Complete ==="
-          echo "Time (UTC): $(date -u)"
+          echo "JanMat Nightly Shutdown Complete"
           echo "Time (IST): $(TZ='Asia/Kolkata' date)"
           DB_STATE=$(gcloud sql instances describe $DB_INSTANCE \
             --project=$PROJECT_ID --format='value(state)' 2>/dev/null || echo "UNKNOWN")
           echo "Cloud SQL: $DB_STATE"
-          echo "Cloud Run: min-instances=0 (scales to zero on no traffic)"
-          echo "Auto-restart scheduled: 6:00 AM IST (00:30 UTC)"
+          echo "All Cloud Run services: min-instances=0"
+          echo "Next startup: 6:00 AM IST (Asia/Kolkata)"
